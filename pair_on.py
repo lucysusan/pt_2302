@@ -6,52 +6,24 @@ Created on 2023/1/18 16:02
 TODO:
  - 查看因子数据状态
 """
-import datetime
-from dateutil.relativedelta import relativedelta
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import warnings
-from CommonUse.funcs import read_pkl, write_pkl, createFolder
-from pprint import pprint
-from numpy.linalg.linalg import norm
 import itertools
-from tqdm import tqdm
+import warnings
 from math import log
+from pprint import pprint
+
+import matplotlib.pyplot as plt
+import pandas as pd
+from CommonUse.funcs import read_pkl, write_pkl
+from numpy.linalg.linalg import norm
+from tqdm import tqdm
+
+from pt_utils.functions import start_date, end_date, form_start, form_end, in_folder, out_folder, stock_pool, \
+    plt_log_price_pair_split_trans
 
 warnings.filterwarnings('ignore')
 plt.rcParams['axes.unicode_minus'] = False
 plt.rcParams['font.sans-serif'] = ['FangSong_GB2312']
 
-
-# %% COMMON FUNCTIONS
-def date_Opt_year(date: str, years: int):
-    d = datetime.datetime.strptime(date, '%Y-%m-%d')
-    d_y = (d - relativedelta(years=years)).strftime('%Y-%m-%d')
-    return d_y
-
-
-def date_Opt_month(date: str, months: int):
-    d = datetime.datetime.strptime(date, '%Y-%m-%d')
-    d_y = (d - relativedelta(months=months)).strftime('%Y-%m-%d')
-    return d_y
-
-
-# %% COMMON VARIABLES
-start_date = '2018-01-01'
-end_date = '2022-11-30'
-form_end = '2022-01-01'
-form_start = date_Opt_year(form_end, 1)
-trans_start = form_end
-trans_end = date_Opt_month(trans_start, -6)
-print(
-    f'formation start\t{form_start}\tformation end\t{form_end}\ntransaction start\t{trans_start}\ttransaction end\t{trans_end}')
-
-in_folder = 'use_data/'
-out_folder = 'data/output_process/'
-fig_folder = out_folder + 'fig/'
-createFolder(fig_folder)
-stock_pool = read_pkl(out_folder + 'stock_pool.pkl')
 # %% cne_exp_use info
 # cne_exposure = read_pkl(in_folder + 'cne6_exposure.pkl')
 # cne_exposure.reset_index(inplace=True)
@@ -143,16 +115,5 @@ quote_head = quote_use.head(100)
 quote_use_pivot = quote_use.pivot(index='date', columns='sid', values='log_vwap_aft')
 write_pkl(out_folder + 'log_vwap_aft_price_pivot.pkl', quote_use_pivot)
 
-
-for c_code in tqdm(cc_top_list):
-    c_df = quote_use_pivot.loc[:, c_code]
-    fig, axs = plt.subplots(1, 2)
-    a = axs[0]
-    b = axs[1]
-    c_df[c_df.index < trans_start].plot(ax=a)
-    c_df[c_df.index >= trans_start].plot(ax=b)
-    plt.savefig(fig_folder + c_code[0] + '-' + c_code[1] + '.png')
-    plt.show()
-
-
+plt_log_price_pair_split_trans(cc_top_list)
 write_pkl(out_folder + 'cc_top10_list.pkl', cc_top_list)
