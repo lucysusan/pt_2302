@@ -22,7 +22,7 @@ from pt_utils.functions import start_date, end_date, form_start, form_end, in_fo
 
 warnings.filterwarnings('ignore')
 plt.rcParams['axes.unicode_minus'] = False
-plt.rcParams['font.sans-serif'] = ['FangSong_GB2312']
+plt.rcParams['font.sans-serif'] = ['FangSong']
 
 # %% cne_exp_use info
 # cne_exposure = read_pkl(in_folder + 'cne6_exposure.pkl')
@@ -106,10 +106,14 @@ stock_pool = list(status_all - status_abnormal)
 
 write_pkl(out_folder + 'stock_pool.pkl', stock_pool)
 # %% TODO: for all 两只股票，给出股票形成期对数价格的画图
-# 给出股票对数价格
+# 给出股票价格和对数价格pivot表
 quote = pd.read_csv(in_folder + 'quote' + f'{start_date}_{end_date}.csv')
 quote_use = quote[quote['sid'].isin(stock_pool)]
 quote_use['vwap_aft'] = quote_use['vwap'] * quote_use['adj_factor']
+origin_price_pivot = quote_use.pivot(index='date', columns='sid', values='vwap_aft')
+write_pkl(out_folder + 'vwap_aft_price_pivot.pkl', origin_price_pivot)
+
+# %%
 quote_use['log_vwap_aft'] = quote_use['vwap_aft'].apply(lambda x: log(x))
 quote_head = quote_use.head(100)
 quote_use_pivot = quote_use.pivot(index='date', columns='sid', values='log_vwap_aft')

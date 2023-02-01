@@ -16,6 +16,7 @@ MEMO:
 """
 from typing import Tuple
 from CommonUse.funcs import createFolder, read_pkl, write_pkl
+from pt_utils.functions import start_date,end_date,form_start,form_end,trans_start,trans_end
 import pandas as pd
 import numpy as np
 from pandas import DataFrame
@@ -32,30 +33,10 @@ plt.rcParams['font.sans-serif'] = ['FangSong']
 plt.rcParams['axes.unicode_minus'] = False
 
 
-def date_Opt_year(date: str, years: int):
-    d = datetime.datetime.strptime(date, '%Y-%m-%d')
-    d_y = (d - relativedelta(years=years)).strftime('%Y-%m-%d')
-    return d_y
-
-
-def date_Opt_month(date: str, months: int):
-    d = datetime.datetime.strptime(date, '%Y-%m-%d')
-    d_y = (d - relativedelta(months=months)).strftime('%Y-%m-%d')
-    return d_y
-
-
-start_date = '2018-01-01'
-end_date = '2022-11-30'
 out_process = 'data/output_process/'
 fig_folder = 'figs/'
 createFolder(fig_folder)
 createFolder(out_process)
-form_end = '2022-01-01'
-form_start = date_Opt_year(form_end, 1)
-trans_start = form_end
-trans_end = date_Opt_month(trans_start, -6)
-print(
-    f'formation start\t{form_start}\tformation end\t{form_end}\ntransaction start\t{trans_start}\ttransaction end\t{trans_end}')
 
 
 def data_timeFilter(df_pkl: str, file_name: str = None, start_date: str = '2018-01-01', end_date: str = '2022-11-30',
