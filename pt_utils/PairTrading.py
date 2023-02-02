@@ -25,6 +25,19 @@ plt.rcParams['axes.unicode_minus'] = False
 plt.rcParams['font.sans-serif'] = ['FangSong']
 
 
+# %% COMMON FUNCTIONS
+def date_Opt_year(date: str, years: int):
+    d = datetime.datetime.strptime(date, '%Y-%m-%d')
+    d_y = (d - relativedelta(years=years)).strftime('%Y-%m-%d')
+    return d_y
+
+
+def date_Opt_month(date: str, months: int):
+    d = datetime.datetime.strptime(date, '%Y-%m-%d')
+    d_y = (d - relativedelta(months=months)).strftime('%Y-%m-%d')
+    return d_y
+
+
 # %% OU PROCESS
 @dataclass
 class OUParams:
@@ -66,8 +79,8 @@ class PairTrading:
         self.trans_start = trans_start
         self.trans_m = trans_m
 
-        self.form_start = PairTrading._date_Opt_year(form_end, form_y)
-        self.trans_end = PairTrading._date_Opt_month(trans_start, -trans_m)
+        self.form_start = date_Opt_year(form_end, form_y)
+        self.trans_end = date_Opt_month(trans_start, -trans_m)
         print(
             f'formation start\t{self.form_start}\tformation end\t{self.form_end}\ntransaction start\t{self.trans_start}\ttransaction end\t{self.trans_end}')
 
@@ -84,18 +97,6 @@ class PairTrading:
 
         print('RESULTS will be saved at ' + self.out_folder)
 
-    # %% COMMON FUNCTIONS
-    @staticmethod
-    def _date_Opt_year(date: str, years: int):
-        d = datetime.datetime.strptime(date, '%Y-%m-%d')
-        d_y = (d - relativedelta(years=years)).strftime('%Y-%m-%d')
-        return d_y
-
-    @staticmethod
-    def _date_Opt_month(date: str, months: int):
-        d = datetime.datetime.strptime(date, '%Y-%m-%d')
-        d_y = (d - relativedelta(months=months)).strftime('%Y-%m-%d')
-        return d_y
 
     # %% COMMON VARIABLES
 
@@ -383,7 +384,7 @@ class PairTrading:
         return rev - ccost, rev_all - ccost_all
 
     # %%
-    def run(self):
+    def run(self, verbose=False):
         stock_pool = self.get_stock_pool()
         price_pivot, origin_price = self.get_price_log_origin(stock_pool)
         cc_top_list = self.get_cc_top_list(stock_pool)
@@ -407,7 +408,8 @@ class PairTrading:
         res_dict = dict(zip(col, res_r))
         res_df = res_df.append(res_dict, ignore_index=True)
         res_df.to_csv(self.out_folder + '配对组交易结果.csv', index=False)
-        print(res_df)
-        print(
-            f'所有挑选出的配对组===================================================================\n已平仓实现收益\t{nrev}\t总盈亏\t{nrev_all}')
+        if verbose:
+            print(res_df)
+            print(
+                f'所有挑选出的配对组===================================================================\n已平仓实现收益\t{nrev}\t总盈亏\t{nrev_all}')
         return res_df, nrev, nrev_all
