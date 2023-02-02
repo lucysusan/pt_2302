@@ -18,7 +18,7 @@ from numpy.linalg.linalg import norm
 from tqdm import tqdm
 
 from pt_utils.functions import start_date, end_date, form_start, form_end, in_folder, out_folder, stock_pool, \
-    plt_log_price_pair_split_trans
+    plt_log_price_pair
 
 warnings.filterwarnings('ignore')
 plt.rcParams['axes.unicode_minus'] = False
@@ -119,5 +119,5 @@ quote_head = quote_use.head(100)
 quote_use_pivot = quote_use.pivot(index='date', columns='sid', values='log_vwap_aft')
 write_pkl(out_folder + 'log_vwap_aft_price_pivot.pkl', quote_use_pivot)
 
-plt_log_price_pair_split_trans(cc_top_list)
+plt_log_price_pair(cc_top_list, out_folder + 'log_vwap_aft_price_pivot.pkl')
 write_pkl(out_folder + 'cc_top10_list.pkl', cc_top_list)
