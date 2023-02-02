@@ -5,20 +5,20 @@ Created on 2023/2/2 14:56
 @author: Susan
 """
 import datetime
+import itertools
 import warnings
 from dataclasses import dataclass
-from numpy.linalg.linalg import norm
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from CommonUse.funcs import read_pkl, createFolder
 from dateutil.relativedelta import relativedelta
+from numpy.linalg.linalg import norm
 from scipy.optimize import minimize
 from scipy.special import erfi
 from sklearn.linear_model import LinearRegression
 from tqdm import tqdm
-import itertools
 
 warnings.filterwarnings('ignore')
 plt.rcParams['axes.unicode_minus'] = False
@@ -71,7 +71,7 @@ class PairTrading:
 
     def __init__(self, form_end: str, trans_start: str, out_route: str = 'result/', form_y: int = 1, trans_m: int = 6,
                  bar_tolerance: float = 1e-4,
-                 c: float = 0.01, c_ratio: float = 1e-4, norm_bar: float = 10, pair_num: int = 10):
+                 c: float = 0.0015, c_ratio: float = 0.0015, norm_bar: float = 10, pair_num: int = 20):
         self.cc_top_list = None
         self.stock_pool = None
         self.form_end = form_end
@@ -96,7 +96,6 @@ class PairTrading:
         self.pair_num = pair_num
 
         print('RESULTS will be saved at ' + self.out_folder)
-
 
     # %% COMMON VARIABLES
 
