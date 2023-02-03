@@ -24,6 +24,28 @@ warnings.filterwarnings('ignore')
 plt.rcParams['axes.unicode_minus'] = False
 plt.rcParams['font.sans-serif'] = ['FangSong']
 
+start_date = '2010-01-04'
+end_date = '2022-11-29'
+
+
+def timer(func):
+    """
+    计时装饰器
+    :param func:
+    :return:
+    """
+
+    def func_wrapper(*args, **kwargs):
+        from time import time
+        time_start = time()
+        result = func(*args, **kwargs)
+        time_end = time()
+        time_spend = time_end - time_start
+        print('\n{0} cost time {1} s\n'.format(func.__name__, time_spend))
+        return result
+
+    return func_wrapper
+
 
 # %% COMMON FUNCTIONS
 def date_Opt_year(date: str, years: int):
@@ -66,8 +88,17 @@ def estimate_OU_params(X_t: np.ndarray) -> OUParams:
 
 
 class PairTrading:
-    stock_status_route = 'use_data/ashare_universe_status.pkl'
-    price_route = 'data/output_process/price_pivot_log_origin.pkl'
+    stock_status_route = 'raw/status.pkl'
+    price_route = 'raw/price_log_origin.pkl'
+    cne_exposure_route = 'raw/barra_exposure.pkl'
+    mkt_cap_route = 'raw/mkt.pkl'
+    amount_route = 'raw/amount.pkl'
+
+    stock_status = None
+    price_pivot_log_origin = None
+    cne_exposure = None
+    mkt_cap = None
+    amount = None
 
     def __init__(self, form_end: str, trans_start: str, out_route: str = 'result/', form_y: int = 1, trans_m: int = 6,
                  bar_tolerance: float = 1e-4,
@@ -97,6 +128,26 @@ class PairTrading:
 
         print('RESULTS will be saved at ' + self.out_folder)
 
+    @staticmethod
+    def clear_object_data():
+        PairTrading.stock_status = None
+        PairTrading.price_pivot_log_origin = None
+        PairTrading.cne_exposure = None
+        PairTrading.mkt_cap = None
+        PairTrading.amount = None
+        return
+
+    @staticmethod
+    def update_object_params(stock_status_route: str or None = None, price_route: str or None = None,
+                             cne_exposure_route: str or None = None, mkt_cap_route: str or None = None,
+                             amount_route: str or None = None):
+        PairTrading.stock_status_route = stock_status_route if stock_status_route else PairTrading.stock_status_route
+        PairTrading.price_route = price_route if price_route else PairTrading.price_route
+        PairTrading.cne_exposure_route = cne_exposure_route if cne_exposure_route else PairTrading.cne_exposure_route
+        PairTrading.mkt_cap_route = mkt_cap_route if mkt_cap_route else PairTrading.mkt_cap_route
+        PairTrading.amount_route = amount_route if amount_route else PairTrading.amount_route
+        return
+
     # %% COMMON VARIABLES
 
     def split_form_trans(self, data):
@@ -124,17 +175,60 @@ class PairTrading:
         status_all = set(stock_status['sid'].unique().tolist())
         return status_all - status_abnormal
 
-    def get_stock_pool(self) -> list:
+    def _stock_pool_status(self) -> list:
         """
         股票池，在formation和transaction阶段都没有异常行为(新上市、退市、停复牌)的股票
         :return: 满足条件的股票池list
         """
-        stock_status = read_pkl(self.stock_status_route)
-        status_form, status_trans = self.split_form_trans(stock_status.set_index('date'))
+        PairTrading.stock_status = read_pkl(
+            self.stock_status_route) if not PairTrading.stock_status else PairTrading.stock_status
+
+        status_form, status_trans = self.split_form_trans(PairTrading.stock_status.set_index('date'))
 
         stock_form = self._partial_stock_pool(status_form.reset_index())
         stock_trans = self._partial_stock_pool(status_trans.reset_index())
         self.stock_pool = list(stock_trans.intersection(stock_form))
+        return self.stock_pool
+
+    def _filter_quantile(self, data: pd.DataFrame, quantile: float = 0.2) -> set:
+        """
+        辅助函数，筛选mkt_cap和amount
+        :param data:
+        :param quantile:
+        :return:
+        """
+        data_form = data[(data.index >= self.form_start) & (data.index < self.form_end)]
+        data_mean = data_form.mean()
+        return set(data_mean[data_mean > data_mean.quantile(quantile)].index)
+
+    def _stock_pool_mkt_cap(self) -> set:
+        """
+        筛选市值，剔除形成期阶段后20%的股票
+        :return:
+        """
+        PairTrading.mkt_cap = read_pkl(self.mkt_cap_route) if not PairTrading.mkt_cap else PairTrading.mkt_cap
+        stock_use = self._filter_quantile(self.mkt_cap)
+        self.stock_pool = list(stock_use.intersection(self.stock_pool))
+        return stock_use
+
+    def _stock_pool_amount(self) -> set:
+        """
+        筛选成交金额，剔除形成期阶段后20%的股票
+        :return:
+        """
+        PairTrading.amount = read_pkl(self.amount_route) if not PairTrading.amount else PairTrading.amount
+        stock_use = self._filter_quantile(self.amount)
+        self.stock_pool = list(stock_use.intersection(self.stock_pool))
+        return stock_use
+
+    def get_stock_pool(self) -> list:
+        """
+        配对交易股票池
+        :return:
+        """
+        self._stock_pool_status()
+        self._stock_pool_mkt_cap()
+        self._stock_pool_amount()
         return self.stock_pool
 
     def get_price_log_origin(self, stock_pool):
@@ -143,8 +237,11 @@ class PairTrading:
         :param stock_pool: 股票池
         :return: log_price_pivot, origin_price_pivot
         """
-        price_pivot_log_origin = read_pkl(self.price_route)
-        price_pivot, origin_price = price_pivot_log_origin['log_vwap_aft'], price_pivot_log_origin['vwap_aft']
+        PairTrading.price_pivot_log_origin = read_pkl(
+            self.price_route) if not PairTrading.price_pivot_log_origin else PairTrading.price_pivot_log_origin
+
+        price_pivot, origin_price = PairTrading.price_pivot_log_origin['log_vwap_aft'], \
+            PairTrading.price_pivot_log_origin['vwap_aft']
         price_pivot = price_pivot[(price_pivot.index >= self.form_start) & (price_pivot.index <= self.trans_end)][
             stock_pool]
         origin_price = origin_price[(origin_price.index >= self.form_start) & (origin_price.index <= self.trans_end)][
@@ -157,8 +254,10 @@ class PairTrading:
         :param stock_pool:
         :return:
         """
-        cne_exposure = read_pkl('use_data/' + 'cne6_exposure.pkl')
+        PairTrading.cne_exposure = read_pkl(
+            self.cne_exposure_route) if not PairTrading.cne_exposure else PairTrading.cne_exposure
 
+        cne_exposure = PairTrading.cne_exposure
         cne_factor = cne_exposure[
             (cne_exposure['date'] >= self.form_start) & (cne_exposure['date'] <= self.form_end) & (
                 cne_exposure['sid'].isin(stock_pool))]
@@ -224,7 +323,7 @@ class PairTrading:
             plt.suptitle(name)
         plt.tight_layout()
         plt.savefig(outer_fig)
-        # plt.show()
+        plt.close()
 
     def plt_log_price_pair(self, cc_top_list, price_pivot):
         """
@@ -383,12 +482,14 @@ class PairTrading:
         return rev - ccost, rev_all - ccost_all
 
     # %%
+    @timer
     def run(self, verbose=False):
-        stock_pool = self.get_stock_pool()
+        stock_pool = self._stock_pool_status()
         price_pivot, origin_price = self.get_price_log_origin(stock_pool)
         cc_top_list = self.get_cc_top_list(stock_pool)
 
-        col = ['stock_0', 'stock_1', '配对系数', '已平仓实现收益', '总盈亏', 'entry_level', 'exit_level', 'trading_tlist']
+        col = ['stock_0', 'stock_1', '配对系数', '已平仓实现收益', '总盈亏', 'entry_level', 'exit_level',
+               'trading_tlist']
         res_df = pd.DataFrame(columns=col)
         nrev, nrev_all = 0, 0
         self.plt_log_price_pair(cc_top_list, price_pivot)
