@@ -94,11 +94,11 @@ class PairTrading:
     mkt_cap_route = 'raw/mkt.pkl'
     amount_route = 'raw/amount.pkl'
 
-    stock_status = None
-    price_pivot_log_origin = None
-    cne_exposure = None
-    mkt_cap = None
-    amount = None
+    stock_status = pd.DataFrame()
+    price_pivot_log_origin = pd.DataFrame()
+    cne_exposure = pd.DataFrame()
+    mkt_cap = pd.DataFrame()
+    amount = pd.DataFrame()
 
     def __init__(self, form_end: str, trans_start: str, out_route: str = 'result/', form_y: int = 1, trans_m: int = 6,
                  bar_tolerance: float = 1e-4,
@@ -130,11 +130,11 @@ class PairTrading:
 
     @staticmethod
     def clear_object_data():
-        PairTrading.stock_status = None
-        PairTrading.price_pivot_log_origin = None
-        PairTrading.cne_exposure = None
-        PairTrading.mkt_cap = None
-        PairTrading.amount = None
+        PairTrading.stock_status = pd.DataFrame()
+        PairTrading.price_pivot_log_origin = pd.DataFrame()
+        PairTrading.cne_exposure = pd.DataFrame()
+        PairTrading.mkt_cap = pd.DataFrame()
+        PairTrading.amount = pd.DataFrame()
         return
 
     @staticmethod
@@ -181,7 +181,7 @@ class PairTrading:
         :return: 满足条件的股票池list
         """
         PairTrading.stock_status = read_pkl(
-            self.stock_status_route) if not PairTrading.stock_status else PairTrading.stock_status
+            PairTrading.stock_status_route) if PairTrading.stock_status.empty else PairTrading.stock_status
 
         status_form, status_trans = self.split_form_trans(PairTrading.stock_status.set_index('date'))
 
@@ -206,8 +206,8 @@ class PairTrading:
         筛选市值，剔除形成期阶段后20%的股票
         :return:
         """
-        PairTrading.mkt_cap = read_pkl(self.mkt_cap_route) if not PairTrading.mkt_cap else PairTrading.mkt_cap
-        stock_use = self._filter_quantile(self.mkt_cap)
+        PairTrading.mkt_cap = read_pkl(PairTrading.mkt_cap_route) if PairTrading.mkt_cap.empty else PairTrading.mkt_cap
+        stock_use = self._filter_quantile(PairTrading.mkt_cap)
         self.stock_pool = list(stock_use.intersection(self.stock_pool))
         return stock_use
 
@@ -216,8 +216,8 @@ class PairTrading:
         筛选成交金额，剔除形成期阶段后20%的股票
         :return:
         """
-        PairTrading.amount = read_pkl(self.amount_route) if not PairTrading.amount else PairTrading.amount
-        stock_use = self._filter_quantile(self.amount)
+        PairTrading.amount = read_pkl(PairTrading.amount_route) if PairTrading.amount.empty else PairTrading.amount
+        stock_use = self._filter_quantile(PairTrading.amount)
         self.stock_pool = list(stock_use.intersection(self.stock_pool))
         return stock_use
 
@@ -238,7 +238,7 @@ class PairTrading:
         :return: log_price_pivot, origin_price_pivot
         """
         PairTrading.price_pivot_log_origin = read_pkl(
-            self.price_route) if not PairTrading.price_pivot_log_origin else PairTrading.price_pivot_log_origin
+            PairTrading.price_route) if PairTrading.price_pivot_log_origin.empty else PairTrading.price_pivot_log_origin
 
         price_pivot, origin_price = PairTrading.price_pivot_log_origin['log_vwap_aft'], \
             PairTrading.price_pivot_log_origin['vwap_aft']
@@ -255,7 +255,7 @@ class PairTrading:
         :return:
         """
         PairTrading.cne_exposure = read_pkl(
-            self.cne_exposure_route) if not PairTrading.cne_exposure else PairTrading.cne_exposure
+            PairTrading.cne_exposure_route) if PairTrading.cne_exposure.empty else PairTrading.cne_exposure
 
         cne_exposure = PairTrading.cne_exposure
         cne_factor = cne_exposure[
@@ -484,14 +484,18 @@ class PairTrading:
     # %%
     @timer
     def run(self, verbose=False):
-        stock_pool = self._stock_pool_status()
-        price_pivot, origin_price = self.get_price_log_origin(stock_pool)
-        cc_top_list = self.get_cc_top_list(stock_pool)
-
         col = ['stock_0', 'stock_1', '配对系数', '已平仓实现收益', '总盈亏', 'entry_level', 'exit_level',
                'trading_tlist']
         res_df = pd.DataFrame(columns=col)
         nrev, nrev_all = 0, 0
+        stock_pool = self.get_stock_pool()
+
+        if not stock_pool:
+            return res_df, nrev, nrev_all
+
+        price_pivot, origin_price = self.get_price_log_origin(stock_pool)
+        cc_top_list = self.get_cc_top_list(stock_pool)
+
         self.plt_log_price_pair(cc_top_list, price_pivot)
         for cc in tqdm(cc_top_list):
             a, m, spread_trans, lmda = self.a_m_best_expected_return(cc, price_pivot, show_fig=True)
