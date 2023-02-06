@@ -561,7 +561,8 @@ class PairTrading:
     def run(self, invest_amount=1e5, verbose=False):
 
         PairTrading.close = read_pkl(PairTrading.close_route) if PairTrading.close.empty else PairTrading.close
-        flow_table = pd.DataFrame(index=PairTrading.close.loc[self.trans_start:self.trans_end].index, columns=['cash', 'value'])
+        flow_table = pd.DataFrame(index=PairTrading.close.loc[self.trans_start:self.trans_end].index,
+                                  columns=['cash', 'value'])
         flow_table.fillna(0, inplace=True)
 
         stock_pool = self.get_stock_pool()
@@ -578,10 +579,18 @@ class PairTrading:
             t_list = self.transaction_time_list(a, m, spread_trans, verbose=verbose)
             flow_df = self.calculate_pair_revenue(cc, origin_price, t_list, lmda, invest_amount=invest_amount,
                                                   verbose=verbose)
-            flow_table = flow_table.merge(flow_df[[f'{cc[0]}_volume_1',f'{cc[1]}_volume_2']], 'outer', left_index=True, right_index=True)
+            flow_table = flow_table.merge(flow_df[[f'{cc[0]}_volume_1', f'{cc[1]}_volume_2']], 'outer', left_index=True,
+                                          right_index=True)
             flow_table['value'] = flow_table['value'] + flow_df['value']
             flow_table['cash'] = flow_table['cash'] + flow_df['cash']
 
+        col_name = flow_table.columns.tolist()
+        flow_table['per_value'] = flow_table['value'] / (invest_amount * self.pair_num)
+        col_name.insert(0, 'per_value')
+        flow_table.reindex(columns=col_name)
+        plt.figure(figsize=(20, 10))
+        flow_table['per_value'].plot()
+        plt.savefig(self.fig_folder + f'配对组净值表现_{self.trans_start}_{self.trans_end}.png')
         flow_table.to_csv(self.out_folder + '净值配对组交易结果.csv')
 
         return flow_table
