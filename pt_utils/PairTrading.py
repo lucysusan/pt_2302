@@ -94,12 +94,14 @@ class PairTrading:
     cne_exposure_route = 'raw/barra_exposure.pkl'
     mkt_cap_route = 'raw/mkt.pkl'
     amount_route = 'raw/amount.pkl'
+    close_route = 'raw/close.pkl'
 
     stock_status = pd.DataFrame()
     price_pivot_log_origin = pd.DataFrame()
     cne_exposure = pd.DataFrame()
     mkt_cap = pd.DataFrame()
     amount = pd.DataFrame()
+    close = pd.DataFrame()
 
     def __init__(self, form_end: str, trans_start: str, out_route: str = 'result/', form_y: int = 1, trans_m: int = 6,
                  bar_tolerance: float = 1e-4,
@@ -449,21 +451,21 @@ class PairTrading:
         :return:
         """
         if method == 'larger':
-            i = np.argmax(data >= target)
-            t = data.index[i]
-            if not i:
-                return None if data[t] < target else t
-            return t
-            # for i, v in data.iteritems():
-            #     if v >= target:
-            #         return i
+            # i = np.argmax(data >= target)
+            # t = data.index[i]
+            # if not i:
+            #     return None if data[t] < target else t
+            # return t
+            for i, v in data.iteritems():
+                if v >= target:
+                    return i
         elif method == 'smaller':
-            i = np.argmin(data <= target) - 1
-            t = data.index[i]
-            return t if i >= 0 else None
-            # for i, v in data.iteritems():
-            #     if v <= target:
-            #         return i
+            # i = np.argmin(data <= target) - 1
+            # t = data.index[i]
+            # return t if i >= 0 else None
+            for i, v in data.iteritems():
+                if v <= target:
+                    return i
         return None
 
     def transaction_time_list(self, a, m, spread_trans, verbose=False):
@@ -496,53 +498,76 @@ class PairTrading:
         print('\t trading_time_list', trade_time_list) if verbose else None
         return trade_time_list
 
-    def calculate_pair_revenue(self, cc, origin_price, trade_time_list, lmda, verbose=False):
+    def calculate_pair_revenue(self, cc, origin_price, trade_time_list, lmda, invest_amount=1e5, verbose=False):
         """
-        计算配对组净收益
+        计算配对组净收益, 返回配对组在transaction阶段的仓位，收盘浮动价值 - 成交价:日内均价后复权，浮动价值:日收盘价后复权
         :param cc: 配对组tuple
         :param origin_price: 股票价格pivot
         :param trade_time_list: 交易时间序列,[买入,卖出,...]
         :param lmda:
+        :param invest_amount: 投入该组合的投资金额总和
         :param verbose:
         :return:
         TODO: 收益率曲线，净值曲线
         """
         print(cc, '\t TRADING REVENUE-------------------------------------------------') if verbose else None
-        if not trade_time_list:
-            print('NO PROPER TRADING OCCURRING') if verbose else None
-            return 0, 0
-        rev = 0
-        price_use = origin_price.loc[trade_time_list, cc]
-        price_delta = price_use.iloc[:, 0] - lmda * price_use.iloc[:, 1]
-        price_ccost = (price_use.iloc[:, 0] + lmda * price_use.iloc[:, 1]) * self.c_ratio
-        ccost_all = sum(price_ccost)
-        t_len = len(trade_time_list)
-        if not t_len % 2:
-            ccost = ccost_all
-            print('已平仓') if verbose else None
-        else:
-            ccost = sum(price_ccost[:-1])
-            print(f'未平仓仓位\t{cc[0]}\t1{cc[1]}\t{-lmda}\tSPREAD\t{price_delta[-1]}') if verbose else None
-        for i, delta in enumerate(price_delta.iloc[:t_len - (t_len % 2)]):
+        # TODO:
+        #  1. trade_list在check_table中提取vwap_1,vwap_2
+        #  2. 整除买入，余项卖出，补充flow_table对应的volume_1,volume_2,cash,outflow; 向后填充
+        #  3. 通过check_table中的close_1,close_2, 以及flow_table中的volume_1,volume_2,cash计算value
+        PairTrading.close = read_pkl(PairTrading.close_route) if PairTrading.close.empty else PairTrading.close
+        close = PairTrading.close.loc[self.trans_start:self.trans_end, cc]
+        col = [f'{cc[0]}_volume_1', f'{cc[1]}_volume_2', 'cash', 'outflow', 'value']
+
+        flow_table = pd.DataFrame(columns=col, index=close.index)
+        flow_dict = dict(zip(col, [0, 0, invest_amount, 0, 0]))
+
+        def _update_flow_table(dv: dict, df: pd.DataFrame, t_i):
+            for k, v in dv.items():
+                df.loc[t_i, k] = v
+            return df
+
+        # 首行
+        flow_table = _update_flow_table(flow_dict, flow_table, flow_table.index[0])
+
+        for i, t in enumerate(trade_time_list):
             if not i % 2:
-                rev -= delta
+                # long 1, short 2
+                num_1 = np.floor(invest_amount / (100 * origin_price.loc[t, cc[0]])) * 100
+                num_2 = - np.floor((invest_amount / (lmda * 100 * origin_price.loc[t, cc[1]])) * lmda) * 100
+                out_flow = num_1 * 100 * origin_price.loc[t, cc[0]] + num_2 * 100 * origin_price.loc[t, cc[1]]
+                cash = invest_amount - out_flow
             else:
-                rev += delta
-        rev_all = rev - price_delta[-1] if t_len % 2 else rev
-        print(f'已平仓实现收益\t{rev - ccost}\t总盈亏\t{rev_all - ccost_all}') if verbose else None
-        return rev - ccost, rev_all - ccost_all
+                # 平仓
+                t_pre = trade_time_list[i - 1]
+                num_1 = - flow_table.loc[t_pre, f'{cc[0]}_volume_1']
+                num_2 = - flow_table.loc[t_pre, f'{cc[1]}_volume_2']
+                cash = flow_table.loc[t_pre, 'cash']
+                out_flow = num_1 * 100 * origin_price.loc[t, cc[0]] + num_2 * 100 * origin_price.loc[t, cc[1]]
+                cash -= out_flow
+                num_1, num_2 = 0, 0
+            flow_table = _update_flow_table(
+                {f'{cc[0]}_volume_1': num_1 * 100, f'{cc[1]}_volume_2': -num_2 * 100, 'cash': cash,
+                 'outflow': out_flow}, flow_table,
+                t)
+        flow_table = flow_table.fillna(method='ffill')
+        flow_table['value'] = flow_table[f'{cc[0]}_volume_1'] * close[cc[0]] + flow_table[f'{cc[1]}_volume_2'] * close[
+            cc[1]] + flow_table['cash']
+        print(flow_table) if verbose else None
+        return flow_table
 
     # %%
     @timer
-    def run(self, verbose=False):
-        col = ['stock_0', 'stock_1', '配对系数', '已平仓实现收益', '总盈亏', 'entry_level', 'exit_level',
-               'trading_tlist']
-        res_df = pd.DataFrame(columns=col)
-        nrev, nrev_all = 0, 0
+    def run(self, invest_amount=1e5, verbose=False):
+
+        PairTrading.close = read_pkl(PairTrading.close_route) if PairTrading.close.empty else PairTrading.close
+        flow_table = pd.DataFrame(index=PairTrading.close.loc[self.trans_start:self.trans_end].index, columns=['cash', 'value'])
+        flow_table.fillna(0, inplace=True)
+
         stock_pool = self.get_stock_pool()
 
         if not stock_pool:
-            return res_df, nrev, nrev_all
+            return None
 
         price_pivot, origin_price = self.get_price_log_origin(stock_pool)
         cc_top_list = self.get_cc_top_list(stock_pool)
@@ -551,20 +576,12 @@ class PairTrading:
         for cc in tqdm(cc_top_list):
             a, m, spread_trans, lmda = self.a_m_best_expected_return(cc, origin_price, show_fig=True, verbose=verbose)
             t_list = self.transaction_time_list(a, m, spread_trans, verbose=verbose)
-            c_nrev, c_nreva = self.calculate_pair_revenue(cc, origin_price, t_list, lmda, verbose=verbose)
-            res_r = [cc[0], cc[1], lmda, c_nrev, c_nreva, a, m, t_list]
-            res_dict = dict(zip(col, res_r))
-            res_df = res_df.append(res_dict, ignore_index=True)
-            nrev += c_nrev
-            nrev_all += c_nreva
+            flow_df = self.calculate_pair_revenue(cc, origin_price, t_list, lmda, invest_amount=invest_amount,
+                                                  verbose=verbose)
+            flow_table = flow_table.merge(flow_df[[f'{cc[0]}_volume_1',f'{cc[1]}_volume_2']], 'outer', left_index=True, right_index=True)
+            flow_table['value'] = flow_table['value'] + flow_df['value']
+            flow_table['cash'] = flow_table['cash'] + flow_df['cash']
 
-        res_r = ['formation', self.form_start, self.form_end, nrev, nrev_all, 'transaction', self.trans_start,
-                 self.trans_end]
-        res_dict = dict(zip(col, res_r))
-        res_df = res_df.append(res_dict, ignore_index=True)
-        res_df.to_csv(self.out_folder + '配对组交易结果.csv', index=False)
-        if verbose:
-            print(res_df)
-            print(
-                f'所有挑选出的配对组===================================================================\n已平仓实现收益\t{nrev}\t总盈亏\t{nrev_all}')
-        return res_df, nrev, nrev_all
+        flow_table.to_csv(self.out_folder + '净值配对组交易结果.csv')
+
+        return flow_table
