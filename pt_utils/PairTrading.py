@@ -8,15 +8,12 @@ import datetime
 import itertools
 import warnings
 from dataclasses import dataclass
-import cvxpy as cp
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from CommonUse.funcs import read_pkl, createFolder
 from dateutil.relativedelta import relativedelta
-from numpy.linalg.linalg import norm
-from scipy.optimize import minimize
 from scipy.special import erfi
 from sklearn.linear_model import LinearRegression
 from tqdm import tqdm
@@ -48,7 +45,6 @@ def timer(func):
     return func_wrapper
 
 
-# %% COMMON FUNCTIONS
 def date_Opt_year(date: str, years: int):
     d = datetime.datetime.strptime(date, '%Y-%m-%d')
     d_y = (d - relativedelta(years=years)).strftime('%Y-%m-%d')
@@ -151,8 +147,6 @@ class PairTrading:
         PairTrading.amount_route = amount_route if amount_route else PairTrading.amount_route
         return
 
-    # %% COMMON VARIABLES
-
     def split_form_trans(self, data):
         """
         function separately deals with data splitting
@@ -163,7 +157,7 @@ class PairTrading:
         data_trans = data[(data.index >= self.trans_start) & (data.index <= self.trans_end)]
         return data_form, data_trans
 
-    # %% 筛选股票池 formation和transaction阶段都非新股，非ST，无停牌复牌行为
+    # %% 筛选股票池 formation和transaction阶段都非新股，非ST，无停牌复牌行为, 市值和成交量前80%
     @staticmethod
     def _partial_stock_pool(stock_status) -> set:
         """
@@ -310,8 +304,6 @@ class PairTrading:
         self.cc_top_list = cc_top_list
         return cc_top_list
 
-    # %% functions
-
     def plt_split_time(self, data, outer_fig, name=None, hline=None):
         """
         formation, transaction分隔画图
@@ -369,8 +361,6 @@ class PairTrading:
         """
         if not isinstance(a, float):
             a = a[0]
-        # l = cp.exp((alpha * a ** 2) / beta ** 2) * (2 * a + c)
-        # r = beta * cp.sqrt(np.pi / alpha) * erfi((a * np.sqrt(alpha)) / beta)
         l = np.exp((alpha * a ** 2) / beta ** 2) * (2 * a + c)
         r = beta * np.sqrt(np.pi / alpha) * erfi((a * np.sqrt(alpha)) / beta)
         return abs(l - r)
@@ -409,18 +399,9 @@ class PairTrading:
 
         spread_form = price_form.apply(lambda x: np.log(x[cc[0]]) - np.log(lmda * x[cc[1]]), axis=1)
         spread_trans = price_trans.apply(lambda x: np.log(x[cc[0]]) - np.log(lmda * x[cc[1]]), axis=1)
-        #
-        # spread_form = (price_form.loc[:, cc[0]] - lmda * price_form.loc[:, cc[1]])
-        # spread_trans = price_trans.loc[:, cc[0]] - lmda * price_trans.loc[:, cc[1]]
         # 计算最优a,m
         spread_array = spread_form.values
         ou_params = estimate_OU_params(spread_array)
-
-        # a = cp.Variable()
-        # prob = cp.Problem(
-        #     cp.Minimize(self._expect_return_optimize_function(a, ou_params.alpha, ou_params.beta, self.c)))
-        # print("status:", prob.status)
-        # print("optimal value", prob.value)
 
         min_a = min(spread_form)
         n_iter = 1000
@@ -556,7 +537,6 @@ class PairTrading:
         print(flow_table) if verbose else None
         return flow_table
 
-    # %%
     @timer
     def run(self, invest_amount=1e5, verbose=False):
 
@@ -584,13 +564,13 @@ class PairTrading:
             flow_table['value'] = flow_table['value'] + flow_df['value']
             flow_table['cash'] = flow_table['cash'] + flow_df['cash']
 
-        col_name = flow_table.columns.tolist()
+        # col_name = flow_table.columns.tolist()
         flow_table['per_value'] = flow_table['value'] / (invest_amount * self.pair_num)
-        col_name.insert(0, 'per_value')
-        flow_table.reindex(columns=col_name)
+        # col_name.insert(0, 'per_value')
+        # flow_table = flow_table[col_name]
         plt.figure(figsize=(20, 10))
         flow_table['per_value'].plot()
-        plt.savefig(self.fig_folder + f'配对组净值表现_{self.trans_start}_{self.trans_end}.png')
+        plt.savefig(self.out_folder + f'配对组净值表现_{self.trans_start}_{self.trans_end}.png')
         flow_table.to_csv(self.out_folder + '净值配对组交易结果.csv')
 
         return flow_table
