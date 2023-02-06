@@ -8,6 +8,7 @@ import datetime
 import itertools
 import warnings
 from dataclasses import dataclass
+import cvxpy as cp
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -156,7 +157,7 @@ class PairTrading:
         :param data:
         :return: formation_data, transaction_data
         """
-        data_form = data[(data.index >= self.form_start) & (data.index < self.form_end)]
+        data_form = data[(data.index >= self.form_start) & (data.index <= self.form_end)]
         data_trans = data[(data.index >= self.trans_start) & (data.index <= self.trans_end)]
         return data_form, data_trans
 
@@ -197,7 +198,7 @@ class PairTrading:
         :param quantile:
         :return:
         """
-        data_form = data[(data.index >= self.form_start) & (data.index < self.form_end)]
+        data_form = data[(data.index >= self.form_start) & (data.index <= self.form_end)]
         data_mean = data_form.mean()
         return set(data_mean[data_mean > data_mean.quantile(quantile)].index)
 
@@ -248,23 +249,37 @@ class PairTrading:
             stock_pool]
         return price_pivot, origin_price
 
+    def get_factor_cov(self):
+        """
+        form_end的因子协方差
+        :return: cov和因子顺序
+        """
+        form_end = self.form_end
+        factor_cov = read_pkl('raw/barra_cov.pkl')
+        factor_cov = factor_cov[factor_cov.index <= form_end].sort_index(ascending=True)
+        t_cov = factor_cov.index.unique().tolist()[-1]
+        cov = factor_cov[factor_cov.index == t_cov]
+        cov = cov.reset_index(drop=True).set_index('factor').sort_index(ascending=True)
+        factor_list = cov.index.tolist()
+        cov_matrix = cov[factor_list].values
+        return cov_matrix, factor_list
+
     def get_cc_top_list(self, stock_pool: list) -> list:
         """
-        得到配对组
+        得到配对组, 距离变量 - 加权L2
         :param stock_pool:
         :return:
         """
         PairTrading.cne_exposure = read_pkl(
             PairTrading.cne_exposure_route) if PairTrading.cne_exposure.empty else PairTrading.cne_exposure
 
+        cov_matrix, factor_list = self.get_factor_cov()
+
         cne_exposure = PairTrading.cne_exposure
         cne_factor = cne_exposure[
             (cne_exposure['date'] >= self.form_start) & (cne_exposure['date'] <= self.form_end) & (
                 cne_exposure['sid'].isin(stock_pool))]
 
-        factor_list = ['beta', 'btop', 'divyild', 'earnqlty', 'earnvar', 'earnyild',
-                       'growth', 'invsqlty', 'leverage', 'liquidty', 'ltrevrsl', 'midcap',
-                       'momentum', 'profit', 'resvol', 'size']
         ind_list = cne_factor['industry'].unique().tolist()
         cne_factor.reset_index(inplace=True)
         ind_group = cne_factor.groupby('industry')
@@ -280,7 +295,8 @@ class PairTrading:
                 val_list = [ind_val_corr.loc[c] for c in cc]
                 ind_df[val] = val_list
 
-            ind_df['norm'] = ind_df.apply(lambda x: norm(x, ord=1), axis=1)
+            ind_df['norm'] = ind_df.apply(lambda x: x.values.T @ cov_matrix @ x.values, axis=1)
+            # TODO: 阈值的设定仍然没有实际含义，在千分之一到百分之一之间
             topn_ind_df = ind_df[ind_df['norm'] > self.norm_bar]
             topn_ind_df['industry'] = ind
             topn_df = pd.concat([topn_df, topn_ind_df])
@@ -351,9 +367,21 @@ class PairTrading:
         """
         if not isinstance(a, float):
             a = a[0]
+        # l = cp.exp((alpha * a ** 2) / beta ** 2) * (2 * a + c)
+        # r = beta * cp.sqrt(np.pi / alpha) * erfi((a * np.sqrt(alpha)) / beta)
         l = np.exp((alpha * a ** 2) / beta ** 2) * (2 * a + c)
         r = beta * np.sqrt(np.pi / alpha) * erfi((a * np.sqrt(alpha)) / beta)
         return abs(l - r)
+
+    def _opt(self, a_list, alpha, beta, c):
+        min_v = 100
+        min_a = 0
+        for a in a_list:
+            v = self._expect_return_optimize_function(a, alpha, beta, c)
+            if v < min_v:
+                min_v = v
+                min_a = a
+        return min_a
 
     def a_m_best_expected_return(self, cc, origin_price, a_init=0.08, show_fig=False, verbose=False):
         """
@@ -385,8 +413,19 @@ class PairTrading:
         # 计算最优a,m
         spread_array = spread_form.values
         ou_params = estimate_OU_params(spread_array)
-        r = minimize(self._expect_return_optimize_function, a_init, args=(ou_params.alpha, ou_params.beta, self.c))
-        a_best = r.x[0]
+
+        # a = cp.Variable()
+        # prob = cp.Problem(
+        #     cp.Minimize(self._expect_return_optimize_function(a, ou_params.alpha, ou_params.beta, self.c)))
+        # print("status:", prob.status)
+        # print("optimal value", prob.value)
+
+        min_a = min(spread_form)
+        n_iter = 1000
+        a_list = np.arange(min_a, 0, -min_a / n_iter)
+        a_best = self._opt(a_list, ou_params.alpha, ou_params.beta, self.c)
+        # r = minimize(self._expect_return_optimize_function, a_init, args=(ou_params.alpha, ou_params.beta, self.c))
+        # a_best = r.x[0]
         m_best = -a_best
         if verbose:
             print(f'\t trading\tbuy per {cc[0]}, sell {lmda}\t{cc[1]}')
@@ -410,13 +449,21 @@ class PairTrading:
         :return:
         """
         if method == 'larger':
-            for i, v in data.iteritems():
-                if v >= target:
-                    return i
+            i = np.argmax(data >= target)
+            t = data.index[i]
+            if not i:
+                return None if data[t] < target else t
+            return t
+            # for i, v in data.iteritems():
+            #     if v >= target:
+            #         return i
         elif method == 'smaller':
-            for i, v in data.iteritems():
-                if v <= target:
-                    return i
+            i = np.argmin(data <= target) - 1
+            t = data.index[i]
+            return t if i >= 0 else None
+            # for i, v in data.iteritems():
+            #     if v <= target:
+            #         return i
         return None
 
     def transaction_time_list(self, a, m, spread_trans, verbose=False):
@@ -458,6 +505,7 @@ class PairTrading:
         :param lmda:
         :param verbose:
         :return:
+        TODO: 收益率曲线，净值曲线
         """
         print(cc, '\t TRADING REVENUE-------------------------------------------------') if verbose else None
         if not trade_time_list:
