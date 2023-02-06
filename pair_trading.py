@@ -10,12 +10,12 @@ from pt_utils.PairTrading import PairTrading
 
 trans_start = '2019-01-01'
 end_date = '2022-01-01'
-out_folder = 'result_0203/'
+out_folder = 'result_0206/'
 n_rev, n_reva = 0, 0
 col = ['stock_0', 'stock_1', '配对系数', '已平仓实现收益', '总盈亏', 'entry_level', 'exit_level', 'trading_tlist']
 nres_df = pd.DataFrame(columns=col)
 while trans_start <= end_date:
-    pt = PairTrading(trans_start, trans_start, out_folder, c=0.0015, c_ratio=0.0015, pair_num=20)
+    pt = PairTrading(trans_start, trans_start, out_folder, c=0.0015, c_ratio=0.0015, pair_num=20, norm_bar=0.007)
     res_df, rev, reva = pt.run()
     nres_df = pd.concat([nres_df, res_df], ignore_index=True)
     n_rev += rev
