@@ -3,6 +3,7 @@
 Created on 2023/1/31 14:14
 
 @author: Susan
+TODO: 1. 询问净值出现这张情况的原因，感觉是cash加了两遍，可能还是成本的问题 2. 有了净值曲线后各种指标的计算，有没有现成的代码
 """
 import pandas as pd
 

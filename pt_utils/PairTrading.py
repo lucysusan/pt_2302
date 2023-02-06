@@ -564,10 +564,7 @@ class PairTrading:
             flow_table['value'] = flow_table['value'] + flow_df['value']
             flow_table['cash'] = flow_table['cash'] + flow_df['cash']
 
-        # col_name = flow_table.columns.tolist()
         flow_table['per_value'] = flow_table['value'] / (invest_amount * self.pair_num)
-        # col_name.insert(0, 'per_value')
-        # flow_table = flow_table[col_name]
         plt.figure(figsize=(20, 10))
         flow_table['per_value'].plot()
         plt.savefig(self.out_folder + f'配对组净值表现_{self.trans_start}_{self.trans_end}.png')
