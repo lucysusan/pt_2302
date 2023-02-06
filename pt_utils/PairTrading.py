@@ -355,11 +355,11 @@ class PairTrading:
         r = beta * np.sqrt(np.pi / alpha) * erfi((a * np.sqrt(alpha)) / beta)
         return abs(l - r)
 
-    def a_m_best_expected_return(self, cc, price_pivot, a_init=0.08, show_fig=False, verbose=False):
+    def a_m_best_expected_return(self, cc, origin_price, a_init=0.08, show_fig=False, verbose=False):
         """
         给定配对组和对数价格，返回entry,exit level,交易时间序列,配对系数
         :param cc:
-        :param price_pivot: log_price pivot
+        :param origin_price: log_price pivot
         :param a_init:
         :param show_fig:
         :param verbose: 是否print中间值, default False
@@ -367,7 +367,7 @@ class PairTrading:
         """
         figFolder = self.fig_folder + 'spread/'
         createFolder(figFolder)
-        cc_price = price_pivot.loc[:, cc]
+        cc_price = origin_price.loc[:, cc]
         price_form, price_trans = self.split_form_trans(cc_price)
 
         y = price_form.loc[:, cc[0]]
@@ -377,8 +377,11 @@ class PairTrading:
         reg.fit(X, y)
         lmda = reg.coef_[0]
 
-        spread_form = price_form.loc[:, cc[0]] - lmda * price_form.loc[:, cc[1]]
-        spread_trans = price_trans.loc[:, cc[0]] - lmda * price_trans.loc[:, cc[1]]
+        spread_form = price_form.apply(lambda x: np.log(x[cc[0]]) - np.log(lmda * x[cc[1]]), axis=1)
+        spread_trans = price_trans.apply(lambda x: np.log(x[cc[0]]) - np.log(lmda * x[cc[1]]), axis=1)
+        #
+        # spread_form = (price_form.loc[:, cc[0]] - lmda * price_form.loc[:, cc[1]])
+        # spread_trans = price_trans.loc[:, cc[0]] - lmda * price_trans.loc[:, cc[1]]
         # 计算最优a,m
         spread_array = spread_form.values
         ou_params = estimate_OU_params(spread_array)
@@ -498,9 +501,9 @@ class PairTrading:
 
         self.plt_log_price_pair(cc_top_list, price_pivot)
         for cc in tqdm(cc_top_list):
-            a, m, spread_trans, lmda = self.a_m_best_expected_return(cc, price_pivot, show_fig=True)
-            t_list = self.transaction_time_list(a, m, spread_trans)
-            c_nrev, c_nreva = self.calculate_pair_revenue(cc, origin_price, t_list, lmda)
+            a, m, spread_trans, lmda = self.a_m_best_expected_return(cc, origin_price, show_fig=True, verbose=verbose)
+            t_list = self.transaction_time_list(a, m, spread_trans, verbose=verbose)
+            c_nrev, c_nreva = self.calculate_pair_revenue(cc, origin_price, t_list, lmda, verbose=verbose)
             res_r = [cc[0], cc[1], lmda, c_nrev, c_nreva, a, m, t_list]
             res_dict = dict(zip(col, res_r))
             res_df = res_df.append(res_dict, ignore_index=True)
