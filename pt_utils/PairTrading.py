@@ -84,6 +84,8 @@ def estimate_OU_params(X_t: np.ndarray) -> OUParams:
     return OUParams(alpha, gamma, float(beta))
 
 
+# %%
+
 class PairTrading:
     stock_status_route = 'raw/status.pkl'
     price_route = 'raw/price_log_origin.pkl'
@@ -157,7 +159,7 @@ class PairTrading:
         data_trans = data[(data.index >= self.trans_start) & (data.index <= self.trans_end)]
         return data_form, data_trans
 
-    # %% 筛选股票池 formation和transaction阶段都非新股，非ST，无停牌复牌行为, 市值和成交量前80%
+    #  筛选股票池 formation和transaction阶段都非新股，非ST，无停牌复牌行为, 市值和成交量前80%
     @staticmethod
     def _partial_stock_pool(stock_status) -> set:
         """
@@ -421,7 +423,7 @@ class PairTrading:
 
         return a_best, m_best, spread_trans, lmda
 
-    # %% trading
+    #  trading
     @staticmethod
     def touch_target(data: pd.Series, target: float, method: str = 'larger'):
         """
@@ -513,19 +515,40 @@ class PairTrading:
 
         for i, t in enumerate(trade_time_list):
             if not i % 2:
-                # long 1, short 2
+                # long 1, short 2, num 以不超过总额为限
                 num_1 = np.floor(invest_amount / (100 * origin_price.loc[t, cc[0]])) * 100
                 num_2 = - np.floor((invest_amount / (lmda * 100 * origin_price.loc[t, cc[1]])) * lmda) * 100
+                num_1_2 = - np.round(num_1 * lmda)
+                num_2_1 = np.round(-num_2 / lmda)
+                max_1 = max(num_1 * origin_price.loc[t, cc[0]], num_1_2 * origin_price.loc[t, cc[1]])
+                max_2 = max(num_2 * origin_price.loc[t, cc[0]], num_2_1 * origin_price.loc[t, cc[1]])
+                if invest_amount >= max(max_1,max_2):
+                    if max_1 > max_2:
+                        num_1, num_2 = num_1, num_1_2
+                    else:
+                        num_1, num_2 = num_2_1, num_2
+                elif invest_amount >= min(max_1, max_2):
+                    if max_1 < max_2:
+                        num_1, num_2 = num_1, num_1_2
+                    else:
+                        num_1, num_2 = num_2_1, num_2
+                else:
+                    print(f'!ERR: NO MATCH CONDITION INVEST WITH LAMBDA. USE NUM AT MOST.{cc}_{t}')
+
                 out_flow = num_1 * 100 * origin_price.loc[t, cc[0]] + num_2 * 100 * origin_price.loc[t, cc[1]]
-                cash = invest_amount - out_flow
+
+                if not i:
+                    t_pre = flow_table.index[0]
+                else:
+                    t_pre = trade_time_list[i - 1]
+                cash = flow_table.loc[t_pre, 'cash'] - out_flow
             else:
                 # 平仓
                 t_pre = trade_time_list[i - 1]
                 num_1 = - flow_table.loc[t_pre, f'{cc[0]}_volume_1']
                 num_2 = - flow_table.loc[t_pre, f'{cc[1]}_volume_2']
-                cash = flow_table.loc[t_pre, 'cash']
                 out_flow = num_1 * 100 * origin_price.loc[t, cc[0]] + num_2 * 100 * origin_price.loc[t, cc[1]]
-                cash -= out_flow
+                cash = flow_table.loc[t_pre, 'cash'] - out_flow
                 num_1, num_2 = 0, 0
             flow_table = _update_flow_table(
                 {f'{cc[0]}_volume_1': num_1 * 100, f'{cc[1]}_volume_2': -num_2 * 100, 'cash': cash,
