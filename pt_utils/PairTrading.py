@@ -594,8 +594,9 @@ class PairTrading:
             flow_table['cash'] = flow_table['cash'] + flow_df['cash']
 
         flow_table['rev'] = flow_table['value'].pct_change()
-        flow_table.loc[flow_table.index[0], 'rev'] = (flow_table.loc[flow_table.index[0], 'value'] / (
-                    invest_amount * self.pair_num)) - 1
+        # flow_table.loc[flow_table.index[0], 'rev'] = (flow_table.loc[flow_table.index[0], 'value'] / (
+        #             invest_amount * self.pair_num)) - 1
+        flow_table.loc[flow_table.index[0], 'rev'] = 0
 
         plt.figure(figsize=(20, 10))
         flow_table['rev'].plot()
