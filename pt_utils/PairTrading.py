@@ -593,10 +593,13 @@ class PairTrading:
             flow_table['value'] = flow_table['value'] + flow_df['value']
             flow_table['cash'] = flow_table['cash'] + flow_df['cash']
 
-        flow_table['per_value'] = flow_table['value'] / (invest_amount * self.pair_num)
+        flow_table['rev'] = flow_table['value'].pct_change()
+        flow_table.loc[flow_table.index[0], 'rev'] = (flow_table.loc[flow_table.index[0], 'value'] / (
+                    invest_amount * self.pair_num)) - 1
+
         plt.figure(figsize=(20, 10))
-        flow_table['per_value'].plot()
-        plt.savefig(self.out_folder + f'配对组净值表现_{self.trans_start}_{self.trans_end}.png')
-        flow_table.to_csv(self.out_folder + '净值配对组交易结果.csv')
+        flow_table['rev'].plot()
+        plt.savefig(self.out_folder + f'配对组收益率表现_{self.trans_start}_{self.trans_end}.png')
+        flow_table.to_csv(self.out_folder + '收益率配对组交易结果.csv')
 
         return flow_table
