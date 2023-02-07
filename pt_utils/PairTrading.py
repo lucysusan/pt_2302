@@ -522,7 +522,7 @@ class PairTrading:
                 num_2_1 = np.round(-num_2 / lmda)
                 max_1 = max(num_1 * origin_price.loc[t, cc[0]], num_1_2 * origin_price.loc[t, cc[1]])
                 max_2 = max(num_2 * origin_price.loc[t, cc[0]], num_2_1 * origin_price.loc[t, cc[1]])
-                if invest_amount >= max(max_1,max_2):
+                if invest_amount >= max(max_1, max_2):
                     if max_1 > max_2:
                         num_1, num_2 = num_1, num_1_2
                     else:
@@ -551,7 +551,7 @@ class PairTrading:
                 cash = flow_table.loc[t_pre, 'cash'] - out_flow
                 num_1, num_2 = 0, 0
             flow_table = _update_flow_table(
-                {f'{cc[0]}_volume_1': num_1 * 100, f'{cc[1]}_volume_2': -num_2 * 100, 'cash': cash,
+                {f'{cc[0]}_volume_1': num_1 * 100, f'{cc[1]}_volume_2': num_2 * 100, 'cash': cash,
                  'outflow': out_flow}, flow_table,
                 t)
         flow_table = flow_table.fillna(method='ffill')
@@ -562,6 +562,12 @@ class PairTrading:
 
     @timer
     def run(self, invest_amount=1e5, verbose=False):
+        """
+        策略运行
+        :param invest_amount: 分给每一个配对组的投资金额
+        :param verbose:
+        :return:
+        """
 
         PairTrading.close = read_pkl(PairTrading.close_route) if PairTrading.close.empty else PairTrading.close
         flow_table = pd.DataFrame(index=PairTrading.close.loc[self.trans_start:self.trans_end].index,
