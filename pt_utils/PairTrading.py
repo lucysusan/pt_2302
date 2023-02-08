@@ -8,6 +8,7 @@ import datetime
 import itertools
 import warnings
 from dataclasses import dataclass
+import pyfolio as pf
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -602,3 +603,19 @@ class PairTrading:
         flow_table.to_csv(self.out_folder + '收益率配对组交易结果.csv')
 
         return flow_table
+
+    @staticmethod
+    def evaluation(flow_table: pd.DataFrame, bm_all: pd.Series, name: str = '000906.SH'):
+        """
+        调用pyfolio生成可视化策略评价
+        :param flow_table: date为index, 含有rev列
+        :param bm_all: date为index, value为基准指数的收益率值
+        :param name: 基准指数名称
+        :return:
+        """
+        flow_table.index = pd.to_datetime(flow_table.index.tolist())
+        rev = flow_table['rev'].dropna()
+        bm_all.name = name
+        bm_df = bm_all.to_frame()
+        bm_data = pd.merge(rev, bm_df, 'left', left_index=True, right_index=True)
+        pf.create_full_tear_sheet(rev, benchmark_rets=bm_data[name])
