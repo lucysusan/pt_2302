@@ -84,7 +84,7 @@ def estimate_OU_params(X_t: np.ndarray) -> OUParams:
     return OUParams(alpha, gamma, float(beta))
 
 
-# %%
+# %% TODO: CHECK CERTAIN DAY'S TRADING PROB.
 
 class PairTrading:
     stock_status_route = 'raw/status.pkl'
@@ -294,7 +294,7 @@ class PairTrading:
                 ind_df[val] = val_list
 
             ind_df['norm'] = ind_df.apply(lambda x: x.values.T @ cov_matrix @ x.values, axis=1)
-            # TODO: 阈值的设定仍然没有实际含义，在千分之一到百分之一之间
+            # 阈值的设定仍然没有实际含义，在千分之一到百分之一之间
             topn_ind_df = ind_df[ind_df['norm'] > self.norm_bar]
             topn_ind_df['industry'] = ind
             topn_df = pd.concat([topn_df, topn_ind_df])
@@ -490,11 +490,9 @@ class PairTrading:
         :param lmda:
         :param invest_amount: 投入该组合的投资金额总和
         :param verbose:
-        :return:
-        TODO: 收益率曲线，净值曲线
+        :return: 仓位，现金流出，日收盘价值
         """
         print(cc, '\t TRADING REVENUE-------------------------------------------------') if verbose else None
-        # TODO:
         #  1. trade_list在check_table中提取vwap_1,vwap_2
         #  2. 整除买入，余项卖出，补充flow_table对应的volume_1,volume_2,cash,outflow; 向后填充
         #  3. 通过check_table中的close_1,close_2, 以及flow_table中的volume_1,volume_2,cash计算value
@@ -594,9 +592,9 @@ class PairTrading:
             flow_table['cash'] = flow_table['cash'] + flow_df['cash']
 
         flow_table['rev'] = flow_table['value'].pct_change()
-        # flow_table.loc[flow_table.index[0], 'rev'] = (flow_table.loc[flow_table.index[0], 'value'] / (
-        #             invest_amount * self.pair_num)) - 1
-        flow_table.loc[flow_table.index[0], 'rev'] = 0
+        flow_table.loc[flow_table.index[0], 'rev'] = (flow_table.loc[flow_table.index[0], 'value'] / (
+                invest_amount * self.pair_num)) - 1
+        # flow_table.loc[flow_table.index[0], 'rev'] = 0
 
         plt.figure(figsize=(20, 10))
         flow_table['rev'].plot()
