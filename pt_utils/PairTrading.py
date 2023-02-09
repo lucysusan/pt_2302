@@ -86,6 +86,7 @@ def estimate_OU_params(X_t: np.ndarray) -> OUParams:
 
 
 # %% TODO: CHECK CERTAIN DAY'S TRADING PROB.
+# %% TODO: 最后一天的平仓用vwap
 
 class PairTrading:
     stock_status_route = 'raw/status.pkl'
@@ -462,7 +463,7 @@ class PairTrading:
         :return: trade_tlist
         """
         if -a < self.bar_tolerance:
-            return None
+            return []
         trade_time_list = []
         i_start = spread_trans.index[0]
         i_end = spread_trans.index[-1]
