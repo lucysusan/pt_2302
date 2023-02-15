@@ -191,21 +191,7 @@ class PairTradingData(object):
         return vwap_data
 
     @staticmethod
-    def get_pair_distance_dict_use(stock_list, mdate, pairs, module: str = 'PairOn' or 'Trading') -> dict or None:
-        if module == 'PairOn':
-            use_dict = {}
-        elif module == 'Trading':
-            use_dict = dict(zip(pairs, [0] * len(pairs)))
-        else:
-            print('Check module input.')
-            return None
-        sk_tuple = tuple(stock_list)
-        cov = PairTradingData.get_cov_data(mdate).set_index('factor').sort_index()
-        factor = PairTradingData.get_stock_factor(sk_tuple, mdate).set_index('sid')
-        cov_matrix = np.matrix(cov)
-
-        for sk_com in pairs:
-            distance = calculate_single_distance_value(sk_com, factor, cov_matrix)
-            if module == 'PairOn':
-                use_dict
-            use_dict.update({sk_com: distance})
+    def get_pair_close_data(pairs: list = None, start_date: str = None, end_date: str = None):
+        sk_set = pairs_sk_set(pairs)
+        close_data = PairTradingData.get_stock_close_adj(tuple(sk_set), start_date, end_date)
+        return close_data

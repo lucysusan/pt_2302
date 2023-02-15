@@ -49,7 +49,7 @@ class Trading(object):
         self.pair_bar = pair_bar
         self.start_date, self.end_date = start_end_period(start_date, freq, freq_num)
         self.price = PairTradingData.get_pair_origin_data(self.pairs, start_date, self.end_date)
-        self.tds_list, _ = PairTradingData.trading_date_between(self.start_date, self.end_date)
+        self.tds_list, _ = PairTradingData.trading_date_between(start_date, self.end_date)
 
     @staticmethod
     def _series_trading_status(series: pd.Series, a: float, zero_ratio: float = 1e-1) -> pd.Series:
@@ -129,14 +129,22 @@ class Trading(object):
 
     @staticmethod
     def daily_pair_position_control(sk_price_1: float, sk_price_2: float, lmda: float, amount: float = 1e5):
+        """
+
+        :param sk_price_1:
+        :param sk_price_2:
+        :param lmda:
+        :param amount:
+        :return: False-卖s1, 买s2; True-买s1, 卖s2
+        """
         sk_1 = sk_price_1 * 100
         sk_2 = sk_price_2 * 100
         am_1 = floor(amount / sk_1)
         am_2 = floor(amount / sk_2)
         if am_1 * lmda <= am_2:
-            return am_1, floor(am_1 * lmda)
+            return -1, am_1, floor(am_1 * lmda)
         else:
-            return floor(am_2 / lmda), am_2
+            return 1, floor(am_2 / lmda), am_2
 
     def run_open_close(self, zero_ratio: float = 1e-1):
         pairs = self.pairs
@@ -164,12 +172,50 @@ class Trading(object):
 
         return pairs_status
 
-    def position_control(self, zero_ratio: float = 1e-1):
+    def position_control(self, amount: float = 1e5, zero_ratio: float = 1e-1):
+        pairs = self.pairs
         pairs_status = self.pairs_status
         price = self.price
+        tds_list = self.tds_list
 
+        close = PairTradingData.get_pair_close_data(pairs, self.start_date, self.end_date)
+        close_pivot = close.pivot(index='date', columns='sid', values='close_adj')
+        price_pivot = price.pivot(index='date', columns='sid', values='vwap_adj')
+        pct = close_pivot.pct_change()
 
+        columns = pd.MultiIndex.from_product(
+            [pairs, ['sk_1_close', 'sk_1_pct', 'sk_1_volume', 'sk_2_close', 'sk_2_pct', 'sk_2_volume', 'cash']])
+        am_df = pd.DataFrame(columns=columns, index=tds_list)
 
+        # fill in close data and the first trading date
+        for cc in pairs:
+            am_df[cc]['sk_1_close'] = close[cc[0]]
+            am_df[cc]['sk_2_close'] = close[cc[1]]
+            am_df[cc]['sk_1_pct'] = pct[cc[0]]
+            am_df[cc]['sk_2_pct'] = pct[cc[1]]
+            am_df.loc[tds_list[0], (cc, 'sk_1_volume')] = 0
+            am_df.loc[tds_list[0], (cc, 'sk_2_volume')] = 0
+            am_df.loc[tds_list[0], (cc, 'cash')] = 0
+            am_df.loc[tds_list[0], (cc, 'sk_1_pct')] = (close_pivot.loc[tds_list[0], cc[0]] - price_pivot.loc[
+                tds_list[0], cc[0]]) / price_pivot.loc[tds_list[0], cc[0]]
+            am_df.loc[tds_list[0], (cc, 'sk_2_pct')] = (close_pivot.loc[tds_list[0], cc[1]] - price_pivot.loc[
+                tds_list[0], cc[1]]) / price_pivot.loc[tds_list[0], cc[1]]
+
+        for cc in pairs:
+            status = pairs_status[cc]
+            open = status == 1
+            close = status == -1
+
+            for td in open.index.tolist():
+                price_1 = price.loc[td, cc[0]]
+                price_2 = price.loc[td, cc[1]]
+                sig, am_1, am_2 = self.daily_pair_position_control(price_1, price_2, self.pairs_entry_dict[cc]['lmda'],
+                                                                   amount)
+                in_flow = sig * (-am_1 * price_1 * 100 + am_2 * price_2 * 100)
+                cash_use_all = am_1 * price_1 * 100 + am_2 * price_2 * 100
+                am_df.loc[td,(cc,'sk_1_volume')] = am_1
+                am_df.loc[td,(cc,'sk_2_volume')] = am_2
+                am_df.loc[td,(cc,)]
 
 
     def daily_trading_info_log(self):
