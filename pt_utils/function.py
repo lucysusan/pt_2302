@@ -11,10 +11,14 @@ import warnings
 import datetime
 from dateutil.relativedelta import relativedelta
 from enum import Enum
+import os
 
 warnings.filterwarnings('ignore')
 plt.rcParams['axes.unicode_minus'] = False
 plt.rcParams['font.sans-serif'] = ['FangSong']
+
+project_path = os.getcwd()
+
 
 factor_name = ['beta', 'btop', 'divyild', 'earnqlty', 'earnvar', 'earnyild', 'growth', 'invsqlty', 'leverage',
                'liquidty', 'ltrevrsl', 'midcap', 'momentum', 'profit', 'resvol', 'size']
@@ -42,10 +46,9 @@ def timer(func):
     return func_wrapper
 
 
-class TradingFrequency(Enum):
-    month = 1
-    quarter = 2
-    year = 3
+def get_current_date():
+    today = datetime.datetime.today()
+    return today.strftime("%m%d")
 
 
 def date_Opt_year(date: str, years: int):
@@ -76,6 +79,13 @@ def date_Opt_quarter(date: str, quarters: int):
     d = datetime.datetime.strptime(date, '%Y-%m-%d')
     d_y = (d - relativedelta(months=quarters * 3)).strftime('%Y-%m-%d')
     return d_y
+
+
+# %%
+class TradingFrequency(Enum):
+    month = 1
+    quarter = 2
+    year = 3
 
 
 def start_end_period(date: str, freq: TradingFrequency = TradingFrequency.month, freq_num: int = 1):

@@ -4,21 +4,20 @@ Created on 2023/2/14 8:44
 
 @author: Susan
 TODO:
+ - PARAM_FILE: LOG - FILE
  - 每日检测：超过 check_day_length 天数低于pair_bar则清空这两支股票
 """
-import numpy as np
-
-import pandas as pd
-
-import matplotlib.pyplot as plt
+import logging
 import warnings
-from pt_utils.function import TradingFrequency, start_end_period, pairs_sk_set, calculate_single_distance_value
-from pt_utils.get_data_sql import PairTradingData
 from math import floor
 
-warnings.filterwarnings('ignore')
+import numpy as np
+import pandas as pd
 
-import logging
+from pt_utils.function import TradingFrequency, start_end_period, pairs_sk_set, calculate_single_distance_value
+from pt_utils.get_data_sql import PairTradingData
+
+warnings.filterwarnings('ignore')
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -39,10 +38,9 @@ class Trading(object):
         TODO: 按月每日检查是否仍为配对组，每日交易是否发生，交易状态是否改变，每个交易日的revenue是多少；
          - 每个交易日顺次遍历，再按照配对组的顺序顺次遍历
             - 得到因子在该交易日的数据，和因子的协方差数据，使用distance_value得到配对组的距离值，若低于bar则将配对组距离dict的value值+1
-                - 剔除value值>=3的配对组(后续不再出现)，并且跳过下一步操作的执行
+                - 剔除value值>=2的配对组(后续不再出现)，并且跳过下一步操作的执行
             - 查看对数价格差的关系，是否达到了敲入敲出的阈值点，若达到了，执行买入卖出操作，并修改该配对组的交易状态，同时记录下该笔交易的发生
         """
-        self.zero_ratio = None
         self.pairs_status = None
         self.pairs = list(pairs_entry_dict.keys())
         self.pairs_entry_dict = pairs_entry_dict
@@ -130,21 +128,21 @@ class Trading(object):
     @staticmethod
     def daily_pair_position_control(sk_price_1: float, sk_price_2: float, lmda: float, amount: float = 1e5):
         """
-
+        sk_1持仓，sk_2持仓
         :param sk_price_1:
         :param sk_price_2:
         :param lmda:
         :param amount:
-        :return: False-卖s1, 买s2; True-买s1, 卖s2
+        :return: 买入-正持仓，卖出-负持仓
         """
         sk_1 = sk_price_1 * 100
         sk_2 = sk_price_2 * 100
         am_1 = floor(amount / sk_1)
         am_2 = floor(amount / sk_2)
         if am_1 * lmda <= am_2:
-            return -1, am_1, floor(am_1 * lmda)
+            return -am_1, floor(am_1 * lmda)
         else:
-            return 1, floor(am_2 / lmda), am_2
+            return floor(am_2 / lmda), -am_2
 
     def run_open_close(self, zero_ratio: float = 1e-1):
         pairs = self.pairs
@@ -168,11 +166,17 @@ class Trading(object):
                 pairs_status[cc] = cc_status
 
         self.pairs_status = pairs_status
-        self.zero_ratio = zero_ratio
 
         return pairs_status
 
-    def position_control(self, amount: float = 1e5, zero_ratio: float = 1e-1):
+    def write_sheet_pairs(self, pairs_df: pd.DataFrame, out_folder: str, file_name: str = '持仓明细'):
+        writer = pd.ExcelWriter(out_folder + file_name + '.xlsx')
+        for cc in self.pairs:
+            pairs_df[cc].to_excel(writer, sheet_name=cc)
+        writer.close()
+        writer.save()
+
+    def position_control(self, amount: float = 1e5):
         pairs = self.pairs
         pairs_status = self.pairs_status
         price = self.price
@@ -184,7 +188,9 @@ class Trading(object):
         pct = close_pivot.pct_change()
 
         columns = pd.MultiIndex.from_product(
-            [pairs, ['sk_1_close', 'sk_1_pct', 'sk_1_volume', 'sk_2_close', 'sk_2_pct', 'sk_2_volume', 'cash']])
+            [pairs,
+             ['sk_1_close', 'sk_1_pct', 'sk_1_volume', 'money_occupied_1', 'sk_2_close', 'sk_2_pct', 'sk_2_volume',
+              'money_occupied_2', 'in_flow']])
         am_df = pd.DataFrame(columns=columns, index=tds_list)
 
         # fill in close data and the first trading date
@@ -209,17 +215,70 @@ class Trading(object):
             for td in open.index.tolist():
                 price_1 = price.loc[td, cc[0]]
                 price_2 = price.loc[td, cc[1]]
-                sig, am_1, am_2 = self.daily_pair_position_control(price_1, price_2, self.pairs_entry_dict[cc]['lmda'],
-                                                                   amount)
-                in_flow = sig * (-am_1 * price_1 * 100 + am_2 * price_2 * 100)
-                cash_use_all = am_1 * price_1 * 100 + am_2 * price_2 * 100
-                am_df.loc[td,(cc,'sk_1_volume')] = am_1
-                am_df.loc[td,(cc,'sk_2_volume')] = am_2
-                am_df.loc[td,(cc,)]
+                # TODO: am_1. am_2增加符号,返回时即增加
+                am_1, am_2 = self.daily_pair_position_control(price_1, price_2, self.pairs_entry_dict[cc]['lmda'],
+                                                              amount)
+                in_flow = - (am_1 * price_1 * 100 + am_2 * price_2 * 100)
+                am_df.loc[td, (cc, 'sk_1_volume')] = am_1
+                am_df.loc[td, (cc, 'sk_2_volume')] = am_2
+                am_df.loc[td, (cc, 'sk_1_pct')] = (close_pivot.loc[td, cc[0]] - price_pivot.loc[td, cc[0]]) / \
+                                                  price_pivot.loc[td, cc[0]]
+                am_df.loc[td, (cc, 'sk_2_pct')] = (close_pivot.loc[td, cc[1]] - price_pivot.loc[td, cc[1]]) / \
+                                                  price_pivot.loc[td, cc[1]]
+                am_df.loc[td, (cc, 'in_flow')] = in_flow
+                am_df.loc[td, (cc, 'money_occupied_1')] = abs(am_1 * price_1 * 100)
+                am_df.loc[td, (cc, 'money_occupied_2')] = abs(am_2 * price_2 * 100)
 
+            for i, td in enumerate(close.index.tolist()):
+                am_1 = am_df.loc[open.index[i], (cc, 'sk_1_volume')]
+                am_2 = am_df.loc[open.index[i], (cc, 'sk_2_volume')]
+                in_flow = am_df.loc[open.index[i], (cc, 'in_flow')]
 
-    def daily_trading_info_log(self):
-        ...
+                logger.info(f'OPEN - {cc} - {open.index[i]} - {(am_1, am_2)} - {in_flow}')
 
-    def daily_revenue_calculation(self):
-        ...
+                in_flow_close = am_1 * price.loc[td, cc[0]] * 100 + am_2 * price.loc[td, cc[1]] * 100 + in_flow
+                i_list = tds_list.index(td)
+                am_df.loc[td, (cc, 'sk_1_pct')] = (price_pivot.loc[td, cc[0]] - close_pivot.loc[
+                    tds_list[i_list], cc[0]]) / close_pivot.loc[tds_list[i_list], cc[0]]
+                am_df.loc[td, (cc, 'sk_2_pct')] = (price_pivot.loc[td, cc[1]] - close_pivot.loc[
+                    tds_list[i_list], cc[1]]) / close_pivot.loc[tds_list[i_list], cc[1]]
+
+                am_df.loc[td, (cc, 'sk_1_volume')] = 0
+                am_df.loc[td, (cc, 'sk_2_volume')] = 0
+                am_df.loc[td, (cc, 'money_occupied_1')] = 0
+                am_df.loc[td, (cc, 'money_occupied_2')] = 0
+                am_df.loc[td, (cc, 'in_flow')] = in_flow_close
+
+                logger.info(f'CLOSE - {cc} - {td} - {(am_1, am_2)} - {in_flow_close}')
+
+            am_df.loc[:, (cc, 'sk_1_volume')] = am_df.loc[:, (cc, 'sk_1_volume')].fillna(method='ffill')
+            am_df.loc[:, (cc, 'sk_2_volume')] = am_df.loc[:, (cc, 'sk_2_volume')].fillna(method='ffill')
+            am_df.loc[:, (cc, 'money_occupied_1')] = am_df.loc[:, (cc, 'money_occupied_1')].fillna(
+                am_df.loc[:, (cc, 'sk_1_volume')] * am_df.loc[:, (cc, 'sk_1_close')].shift(1))
+            am_df.loc[:, (cc, 'money_occupied_2')] = am_df.loc[:, (cc, 'money_occupied_2')].fillna(
+                am_df.loc[:, (cc, 'sk_2_volume')] * am_df.loc[:, (cc, 'sk_2_close')].shift(1))
+
+        return am_df
+
+    def calculate_pairs_rev(self, am_df, out_folder: str, rev_filename: str = 'rev_pair'):
+        pairs = self.pairs
+        rev_df = pd.DataFrame(index=self.tds_list, columns=pairs)
+        for cc in pairs:
+            df = am_df[cc]
+            rev = (np.sign(df['sk_1_volume']) * df['money_occupied_1'] * df['sk_1_pct'] + np.sign(df['sk_2_volume']) *
+                   df['money_occupied_2'] * df['sk_2_pct']) / (df['money_occupied_1'] + df['money_occupied_2'])
+            rev_df[cc] = rev
+
+        rev_mean = rev_df.mean(axis=1)
+        rev_df.to_csv(out_folder + rev_filename + '.csv')
+
+        return rev_df, rev_mean
+
+    def run(self, out_folder: str, amount: float = 1e5, zero_ratio: float = 1e-1):
+        logger.info(
+            f'---------------------------START_DATE\t{self.start_date}\tEND_DATE\t{self.end_date}---------------------------')
+        self.run_open_close(zero_ratio)
+        am_df = self.position_control(amount)
+        self.write_sheet_pairs(am_df, out_folder)
+        self.calculate_pairs_rev(am_df, out_folder)
+        logger.info(f'---------------------------END---------------------------')
