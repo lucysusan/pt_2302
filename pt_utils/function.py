@@ -17,9 +17,6 @@ warnings.filterwarnings('ignore')
 plt.rcParams['axes.unicode_minus'] = False
 plt.rcParams['font.sans-serif'] = ['FangSong']
 
-project_path = os.getcwd()
-
-
 factor_name = ['beta', 'btop', 'divyild', 'earnqlty', 'earnvar', 'earnyild', 'growth', 'invsqlty', 'leverage',
                'liquidty', 'ltrevrsl', 'midcap', 'momentum', 'profit', 'resvol', 'size']
 factor_name.sort()
@@ -129,6 +126,48 @@ def pairs_sk_set(pairs: list) -> set:
     pairs_set_list = [set(sk) for sk in pairs]
     sk_set = pairs_set_list[0].union(*pairs_set_list[1:])
     return sk_set
+
+
+def visualize_price_spread(price, spread, outer_fig, name=None, hline=None):
+    """
+    formation, transaction分隔画图
+    :param price: 待画图数据, tuple(form,trans) or pd.DataFrame or pd.Series
+    :param spread:
+    :param outer_fig: fig地址
+    :param name: fig title
+    :param hline: 是否需要添加横线，默认None不需要
+    :return:
+    """
+    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(20, 10))
+    a, b = axes[0], axes[1]
+    a.set_title('log_vwap')
+    b.set_title('spread')
+    price.plot(ax=a)
+    spread.plot(ax=b)
+    if hline:
+        for i, y in enumerate(hline, start=1):
+            if i % 2:
+                plt.axhline(y=y, color="black", linestyle="--")
+            else:
+                plt.axhline(y=y, color="grey", linestyle=":")
+    if name:
+        plt.suptitle(name)
+    plt.tight_layout()
+    plt.savefig(outer_fig, dpi=300)
+    plt.close()
+
+
+def visualize_spread(cc, spread, outer_fig, hline=None):
+    spread.plot()
+    plt.title(str(cc) + '_spread')
+    if hline:
+        for i, y in enumerate(hline, start=1):
+            if i % 2:
+                plt.axhline(y=y, color="black", linestyle="--")
+            else:
+                plt.axhline(y=y, color="grey", linestyle=":")
+    plt.savefig(outer_fig, dpi=300)
+    plt.close()
 
 
 if __name__ == '__main__':

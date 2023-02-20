@@ -14,8 +14,10 @@ from pt_utils.function import timer, factor_name, calculate_single_distance_valu
 
 warnings.filterwarnings('ignore')
 
+project_path = 'D:/courses/2022-2024FDU/COURCES/Dlab/intern/PairTrading/pt/'
 
-def create_sql_engine(db_name: str = 'PairTrading.db'):
+
+def create_sql_engine(db_name: str = project_path + 'pt_utils\PairTrading.db'):
     conn = sqlite3.connect(db_name)
     return conn
 
@@ -185,6 +187,14 @@ class PairTradingData(object):
         return pd.read_sql(close_sql, PairTradingData.conn)
 
     @staticmethod
+    def get_index_data(start_date: str, end_date: str, sid: str = '000906.SH'):
+        index_sql = f"""
+        select date,sid,close from index_quote where date between '{start_date}' and '{end_date}' and sid = '{sid}'
+        """
+        data = pd.read_sql(index_sql, PairTradingData.conn)
+        return data.pivot(index='date', columns='sid', values='close')
+
+    @staticmethod
     def get_pair_origin_data(pairs: list = None, start_date: str = None, end_date: str = None):
         sk_set = pairs_sk_set(pairs)
         vwap_data = PairTradingData.get_stock_vwap_adj(tuple(sk_set), start_date, end_date)
@@ -195,3 +205,7 @@ class PairTradingData(object):
         sk_set = pairs_sk_set(pairs)
         close_data = PairTradingData.get_stock_close_adj(tuple(sk_set), start_date, end_date)
         return close_data
+
+    @staticmethod
+    def get_data_tmp(sql):
+        return pd.read_sql(sql,PairTradingData.conn)
