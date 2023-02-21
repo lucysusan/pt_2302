@@ -7,10 +7,9 @@ Created on 2023/2/13 12:20
 import sqlite3
 import warnings
 
-import numpy as np
 import pandas as pd
-from math import ceil
-from pt_utils.function import timer, factor_name, calculate_single_distance_value, pairs_sk_set
+
+from pt_utils.function import factor_name, pairs_sk_set
 
 warnings.filterwarnings('ignore')
 
@@ -189,10 +188,10 @@ class PairTradingData(object):
     @staticmethod
     def get_index_data(start_date: str, end_date: str, sid: str = '000906.SH'):
         index_sql = f"""
-        select date,sid,close from index_quote where date between '{start_date}' and '{end_date}' and sid = '{sid}'
+        select date,sid,(close-preclose)/preclose as pct from index_quote where date between '{start_date}' and '{end_date}' and sid = '{sid}'
         """
         data = pd.read_sql(index_sql, PairTradingData.conn)
-        return data.pivot(index='date', columns='sid', values='close')
+        return data.pivot(index='date', columns='sid', values='pct')
 
     @staticmethod
     def get_pair_origin_data(pairs: list = None, start_date: str = None, end_date: str = None):
@@ -208,4 +207,4 @@ class PairTradingData(object):
 
     @staticmethod
     def get_data_tmp(sql):
-        return pd.read_sql(sql,PairTradingData.conn)
+        return pd.read_sql(sql, PairTradingData.conn)

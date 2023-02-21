@@ -4,12 +4,12 @@ Created on 2023/2/14 10:48
 
 @author: Susan
 """
-import numpy as np
 from dataclasses import dataclass
-from sklearn.linear_model import LinearRegression
-from scipy.special import erfi
-from pt_utils.function import timer
 from math import floor
+
+import numpy as np
+from scipy.special import erfi
+from sklearn.linear_model import LinearRegression
 
 
 @dataclass
@@ -23,7 +23,13 @@ class OUProcess(object):
 
     def __init__(self, X_t: np.ndarray):
         self.X_t = X_t
-        self.ou_param = self._estimate_OU_params()
+        self.ou_param = None
+        self.exists = False
+        ou_param = self._estimate_OU_params()
+        if ou_param.alpha >0 and ou_param.beta >0:
+            self.ou_param = ou_param
+            self.exists = True
+
 
     def _estimate_OU_params(self) -> OUParams:
         """

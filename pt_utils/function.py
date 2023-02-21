@@ -4,18 +4,18 @@ Created on 2023/2/13 15:26
 
 @author: Susan
 """
+import datetime
+import warnings
+from enum import Enum
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import warnings
-import datetime
 from dateutil.relativedelta import relativedelta
-from enum import Enum
-import os
 
 warnings.filterwarnings('ignore')
 plt.rcParams['axes.unicode_minus'] = False
-plt.rcParams['font.sans-serif'] = ['FangSong']
+plt.rcParams['font.sans-serif'] = ['Microsoft YaHei']
 
 factor_name = ['beta', 'btop', 'divyild', 'earnqlty', 'earnvar', 'earnyild', 'growth', 'invsqlty', 'leverage',
                'liquidty', 'ltrevrsl', 'midcap', 'momentum', 'profit', 'resvol', 'size']
@@ -124,7 +124,7 @@ def pairs_sk_set(pairs: list) -> set:
     :return:
     """
     pairs_set_list = [set(sk) for sk in pairs]
-    sk_set = pairs_set_list[0].union(*pairs_set_list[1:])
+    sk_set = pairs_set_list[0].union(*pairs_set_list[1:]) if len(pairs_set_list) else {}
     return sk_set
 
 

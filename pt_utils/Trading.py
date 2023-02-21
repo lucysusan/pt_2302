@@ -12,15 +12,19 @@ import logging
 import warnings
 from math import floor
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pyfolio as pf
 from CommonUse.funcs import createFolder
+
 from pt_utils.function import TradingFrequency, start_end_period, pairs_sk_set, calculate_single_distance_value, timer, \
     visualize_spread
 from pt_utils.get_data_sql import PairTradingData
 
 warnings.filterwarnings('ignore')
+plt.rcParams['axes.unicode_minus'] = False
+plt.rcParams['font.sans-serif'] = ['Microsoft YaHei']
 
 
 class Trading(object):
@@ -63,14 +67,18 @@ class Trading(object):
 
         sig_series = np.sign(series) * np.sign(series.shift(1))
         status_close = sig_series <= 0
-        # status_close = abs_series <= abs(zero_bar)
-        # TODO: 和前一天的signal
+
         status[status_open] = 1
         status[status_close] = -1
 
         for end in range(len(index_list)):
             if not sum(status[:index_list[end]]) in [0, 1]:
                 status[end] = 0
+
+        # if positions exists, last day will close all positions compulsory
+        sum_status = sum(status[:-1])
+
+        status[index_list[-1]] = -1 if sum_status else 0
 
         return status
 
@@ -178,7 +186,7 @@ class Trading(object):
         writer.save()
         writer.close()
 
-    def position_control(self, logger, amount: float = 1e6):
+    def position_control(self, logger, amount: float = 1e6, c: float = 0.0015):
         pairs = self.pairs
         pairs_status = self.pairs_status
         price = self.price
@@ -219,7 +227,8 @@ class Trading(object):
 
                 am_1, am_2 = self.daily_pair_position_control(price_1, price_2, self.pairs_entry_dict[cc]['lmda'],
                                                               amount)
-                in_flow = - (am_1 * price_1 * 100 + am_2 * price_2 * 100)
+                in_flow = - (am_1 * price_1 * 100 + am_2 * price_2 * 100) - c * (
+                        abs(am_1 * price_1 * 100) + abs(am_2 * price_2 * 100))
                 am_df.loc[td, (cc, 'sk_1_volume')] = am_1
                 am_df.loc[td, (cc, 'sk_2_volume')] = am_2
                 am_df.loc[td, (cc, 'sk_1_pct')] = (close_pivot.loc[td, cc[0]] - price_pivot.loc[td, cc[0]]) / \
@@ -227,8 +236,8 @@ class Trading(object):
                 am_df.loc[td, (cc, 'sk_2_pct')] = (close_pivot.loc[td, cc[1]] - price_pivot.loc[td, cc[1]]) / \
                                                   price_pivot.loc[td, cc[1]]
                 am_df.loc[td, (cc, 'in_flow')] = in_flow
-                am_df.loc[td, (cc, 'money_occupied_1')] = abs(am_1 * price_1 * 100)
-                am_df.loc[td, (cc, 'money_occupied_2')] = abs(am_2 * price_2 * 100)
+                am_df.loc[td, (cc, 'money_occupied_1')] = abs(am_1 * price_1 * 100) * (1 + c)
+                am_df.loc[td, (cc, 'money_occupied_2')] = abs(am_2 * price_2 * 100) * (1 + c)
 
                 logger.info(f'OPEN - {cc} - {td} - {(am_1, am_2)} - {in_flow}')
 
@@ -238,7 +247,9 @@ class Trading(object):
                 in_flow = am_df.loc[open[i], (cc, 'in_flow')].values[0]
 
                 in_flow_close = am_1 * price_pivot.loc[td, cc[0]] * 100 + am_2 * price_pivot.loc[
-                    td, cc[1]] * 100 + in_flow
+                    td, cc[1]] * 100 + in_flow - c * (
+                                        abs(am_1) * price_pivot.loc[td, cc[0]] * 100 + abs(am_2) * price_pivot.loc[
+                                    td, cc[1]] * 100)
                 i_list = tds_list.index(td)
                 am_df.loc[td, (cc, 'sk_1_pct')] = (price_pivot.loc[td, cc[0]] - close_pivot.loc[
                     tds_list[i_list], cc[0]]) / close_pivot.loc[tds_list[i_list], cc[0]]
@@ -291,12 +302,12 @@ class Trading(object):
         return rev_df
 
     @timer
-    def run(self, out_folder: str, amount: float = 1e6):
+    def run(self, out_folder: str, amount: float = 1e6, c: float = 0.0015):
         createFolder(out_folder)
 
         logger = logging.getLogger(__name__)
         logger.setLevel(logging.INFO)
-        file_handler = logging.FileHandler(out_folder + 'trading_log_file.log')
+        file_handler = logging.FileHandler(out_folder + '../trading_log_file.log')
         file_formatter = logging.Formatter('%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
         file_handler.setFormatter(file_formatter)
         logger.addHandler(file_handler)
@@ -304,24 +315,26 @@ class Trading(object):
         logger.info(
             f'---------------------------START_DATE\t{self.start_date}\tEND_DATE\t{self.end_date}---------------------------')
         self.run_open_close()
-        am_df = self.position_control(logger, amount)
+        am_df = self.position_control(logger, amount, c)
         self.write_sheet_pairs(am_df, out_folder)
         rev_df = self.calculate_pairs_rev(am_df, out_folder)
         logger.info(f'---------------------------END---------------------------')
         return rev_df
 
-    @timer
-    def evaluation(self, flow_table: pd.DataFrame, index_sid: str = '000906.SH'):
+    @staticmethod
+    def evaluation(flow_table: pd.DataFrame, index_df: pd.DataFrame, index_sid: str = '000906.SH', disp: bool = False):
         """
         调用pyfolio生成可视化策略评价
         :param flow_table: date为index, 含有rev列
+        :param index_df: 基准指数数据表
         :param index_sid: 基准指数名称
+        :param disp: 是否显示该期图表, DEFAULT 不显示
         :return:
         """
         flow_table.index = pd.to_datetime(flow_table.index.tolist())
-        rev = flow_table['mean'].dropna()
-        index_df = PairTradingData.get_index_data(self.start_date, self.end_date, index_sid)
-        index_df.index = pd.to_datetime(index_df.index)
-        index_df = index_df.pct_change()
-        bm_data = pd.merge(rev, index_df, 'left', left_index=True, right_index=True)
-        pf.create_full_tear_sheet(bm_data['mean'], benchmark_rets=bm_data[index_sid])
+        cum_netv_mean_ret = (flow_table + 1).cumprod().mean(axis=1).pct_change().dropna()
+        cum_netv_mean_ret.name = 'ret'
+        bm_data = pd.merge(cum_netv_mean_ret.to_frame(), index_df, 'left', left_index=True, right_index=True)
+        if disp:
+            pf.create_returns_tear_sheet(bm_data['ret'], benchmark_rets=bm_data[index_sid])
+        return bm_data

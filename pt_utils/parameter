@@ -1,0 +1,19 @@
+[general]
+start_date = 2020-01-01
+end_date = 2022-11-29
+c = 0.0015
+
+
+[formation]
+form_end = 2018-07-01
+form_freq = month
+form_freq_num = -1
+pair_bar = 0.02
+
+
+[transaction]
+trans_start = '2018-07-01'
+trans_freq = month
+trans_freq_num = 1
+amount = 1e7
+index_sid = '000906.SH'

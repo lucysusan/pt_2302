@@ -4,17 +4,17 @@ Created on 2023/2/14 8:53
 
 @author: Susan
 """
-from pt_utils.function import TradingFrequency
-from pt_utils.get_data_sql import PairTradingData
+import itertools
+
 import numpy as np
-from pt_utils.function import timer, calculate_single_distance_value, TradingFrequency, start_end_period, \
-    visualize_price_spread
+import pandas as pd
 from CommonUse.funcs import createFolder
 from sklearn.linear_model import LinearRegression
+
 from pt_utils.OUProcess import OUProcess
-import pandas as pd
-from math import ceil
-import itertools
+from pt_utils.function import timer, calculate_single_distance_value, TradingFrequency, start_end_period, \
+    visualize_price_spread
+from pt_utils.get_data_sql import PairTradingData
 
 
 # %% PairOn
@@ -43,12 +43,11 @@ class PairOn(object):
 
         return list(stock_list)
 
-    def _pair_on(self, stock_list: list, mdate: str, pair_num: int = 20) -> list:
+    def _pair_on(self, stock_list: list, mdate: str) -> list:
         """
         配对组
         :param stock_list:
         :param mdate:
-        :param pair_num: list of tuples
         :return: list of tuples
         """
         sk_tuple = tuple(stock_list)
@@ -70,21 +69,20 @@ class PairOn(object):
 
         pair_bar = self.pair_bar
         pairs = distance_series[distance_series <= pair_bar].index.tolist()
-        pairs = distance_series.nsmallest(pair_num).index.tolist()
+        # pairs = distance_series.nsmallest(pair_num).index.tolist()
         # bar = distance_series.nsmallest(pair_num_bar).iloc[-1]
 
         return pairs
 
     @timer
-    def run_pairOn(self, pair_num: int = 20) -> (list, float):
+    def run_pairOn(self) -> (list, float):
         """
         list of tuples
-        :param pair_num:
         :return:
         """
         stock_list = self.stock_pool()
         _, mdate = PairTradingData.trading_date_between(self.start_date, self.end_date)
-        pairs = self._pair_on(stock_list, mdate, pair_num)
+        pairs = self._pair_on(stock_list, mdate)
         self.pairs = pairs
 
         return pairs
@@ -99,14 +97,16 @@ class PairOn(object):
     def _single_entry_level(self, price_pair: pd.DataFrame, c: float = 0.0015):
         price_pivot = price_pair.pivot(index='date', columns='sid', values='vwap_adj')
         cc = price_pivot.columns.tolist()
-        # TODO: draw log price and spread during formation
         lmda = self._calculate_cc_lmda(price_pivot.loc[:, cc[0]], price_pivot.loc[:, cc[1]])
         spread = price_pivot.apply(lambda x: np.log(x[cc[0]]) - np.log(lmda * x[cc[1]]), axis=1)
         spread_array = spread.values
         ou = OUProcess(spread_array)
-        a, cycle = ou.run_ouOpt(c)
 
-        visualize_price_spread(price_pivot, spread, self.out_folder + f'form_{str(cc)}.jpg', str(cc), [a, 0, -a])
+        if ou.exists:
+            a, cycle = ou.run_ouOpt(c)
+            visualize_price_spread(price_pivot, spread, self.out_folder + f'form_{str(cc)}.jpg', str(cc), [a, 0, -a])
+        else:
+            a, cycle = None, None
         return lmda, a, cycle
 
     @timer
@@ -122,16 +122,16 @@ class PairOn(object):
         for cc in pairs:
             price_pair = price[price['sid'].isin(list(cc))]
             lmda, best_a, cycle = self._single_entry_level(price_pair, c)
-            pairs_entry_dict.update({cc: {'lmda': lmda, 'entry': best_a, 'cycle': cycle}})
+            if best_a is not None:
+                pairs_entry_dict.update({cc: {'lmda': lmda, 'entry': best_a, 'cycle': cycle}})
         return pairs_entry_dict
 
 
 if __name__ == '__main__':
     end_date = '2018-07-01'
-    pair_num = 20
     form_freq = TradingFrequency.month
     form_freq_num = -1
     c = 0.0015
     pt_db = PairOn(end_date, form_freq, form_freq_num)
-    pair = pt_db.run_pairOn(pair_num)
+    pair = pt_db.run_pairOn()
     pair_entry_dict = pt_db.run_opt_pair_entry_level(pair, c)
