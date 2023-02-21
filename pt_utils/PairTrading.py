@@ -1,13 +1,85 @@
 # -*- coding: utf-8 -*-
 """
-Created on 2023/2/21 18:29
+Created on 2023/2/16 13:32
 
 @author: Susan
 """
-import numpy as np
+import configparser
+import os
+
 import pandas as pd
-import matplotlib.pyplot as plt
-import warnings 
-warnings.filterwarnings('ignore')
-plt.rcParams['axes.unicode_minus'] = False
-plt.rcParams['font.sans-serif'] = ['FangSong']
+import pyfolio as pf
+
+from pt_utils.PairOn import PairOn
+from pt_utils.Trading import Trading, TradingFrequency
+from pt_utils.function import get_current_date, start_end_period
+from pt_utils.get_data_sql import PairTradingData
+
+project_path = os.getcwd()
+
+config_file = project_path + '/pt_utils/parameter'
+
+config = configparser.ConfigParser()
+config.read(config_file)
+freq_dict = {'month': 1, 'quarter': 2, 'year': 3}
+
+start_date = config['general']['start_date']
+end_date = config['general']['end_date']
+c = config['general'].getfloat('c')
+
+form_end = config['formation']['form_end']
+form_freq = TradingFrequency(freq_dict[config['formation']['form_freq']])
+form_freq_num = config['formation'].getint('form_freq_num')
+pair_bar = config['formation'].getfloat('pair_bar')
+
+trans_start = config['transaction']['trans_start']
+trans_freq = TradingFrequency(freq_dict[config['transaction']['trans_freq']])
+trans_freq_num = config['transaction'].getint('trans_freq_num')
+amount = config['transaction'].getfloat('amount')
+index_sid = config['transaction']['index_sid']
+
+index_df = PairTradingData.get_index_data(start_date, end_date)
+index_df.index = pd.to_datetime(index_df.index)
+
+
+def PairTrading_once(form_end=form_end, form_freq=form_freq, form_freq_num=form_freq_num, project_path=project_path,
+                     pair_bar=pair_bar, c=c, trans_start=trans_start, trans_freq=trans_freq,
+                     trans_freq_num=trans_freq_num,
+                     amount=amount, index_df=index_df, index_sid=index_sid, disp: bool = True):
+    today = get_current_date()
+    trade_out_folder = f"""{project_path}/output/{today}/{form_end}_{form_freq_num}{str(form_freq).split('.')[-1]}_{trans_start}_{trans_freq_num}{str(trans_freq).split('.')[-1]}/"""
+    pt_db = PairOn(form_end, form_freq, form_freq_num, out_folder=trade_out_folder + 'formation/', pair_bar=pair_bar)
+    pair = pt_db.run_pairOn()
+    pair_entry_dict = pt_db.run_opt_pair_entry_level(pair, c)
+
+    # %%
+    trade = Trading(pair_entry_dict, pair_bar, trans_start, trans_freq, trans_freq_num,
+                    out_folder=trade_out_folder + 'transaction/')
+    if pair_entry_dict:
+        rev_df = trade.run(trade_out_folder, amount, c)
+        bm_data = trade.evaluation(rev_df, index_df, index_sid, disp)
+    else:
+        bm_data = pd.DataFrame(columns=['ret', index_sid])
+    return bm_data, trade.end_date
+
+
+def PairTrading(start_date=start_date, end_date=end_date, form_freq=form_freq, form_freq_num=form_freq_num,
+                trans_freq=trans_freq, trans_freq_num=trans_freq_num, pair_bar=pair_bar, c=c, amount=amount,
+                index_df=index_df, index_sid=index_sid, project_path=project_path, disp: bool = False):
+    today = get_current_date()
+    _, form_end_start = start_end_period(start_date, form_freq, form_freq_num)
+    trans_start_end, _ = start_end_period(end_date, trans_freq, -trans_freq_num)
+    form_end = form_end_start
+    trans_start = form_end_start
+    bm_df = pd.DataFrame(columns=['ret', index_sid])
+    while trans_start <= trans_start_end:
+        bm_data, form_start = PairTrading_once(form_end, form_freq, form_freq_num, project_path, pair_bar, c,
+                                               trans_start,
+                                               trans_freq, trans_freq_num, amount, index_df, index_sid, disp)
+        bm_df = pd.concat([bm_df, bm_data])
+        _, form_end = start_end_period(form_start, form_freq, -form_freq_num)
+        trans_start = form_end
+
+    pf.create_returns_tear_sheet(bm_df['ret'], benchmark_rets=bm_df[index_sid])
+    bm_df.to_csv(f'{project_path}/output/{today}/ret_index.csv')
+    return bm_df
