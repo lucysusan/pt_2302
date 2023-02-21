@@ -48,7 +48,7 @@ class Trading(object):
         self.start_date, self.end_date = start_end_period(start_date, freq, freq_num)
         self.price = PairTradingData.get_pair_origin_data(self.pairs, start_date, self.end_date)
         self.tds_list, _ = PairTradingData.trading_date_between(start_date, self.end_date)
-        self.outer_folder = out_folder
+        self.out_folder = out_folder
         createFolder(out_folder)
 
     @staticmethod
@@ -74,7 +74,7 @@ class Trading(object):
         status[status_close] = -1
 
         for end in range(len(index_list)):
-            if abs(sum(status[:index_list[end]])) > 1:
+            if not sum(status[:index_list[end]]) in [0, 1]:
                 status[end] = 0
 
         return status
@@ -99,7 +99,7 @@ class Trading(object):
             # TODO: price_pivot here account for latter position control
 
             spread = price_pivot.apply(lambda x: np.log(x[cc[0]]) - np.log(lmda * x[cc[1]]), axis=1)
-            visualize_spread(cc, spread, self.outer_folder + f'trans_{str(cc)}.jpg', [a, 0, -a])
+            visualize_spread(cc, spread, self.out_folder + f'trans_{str(cc)}.jpg', [a, 0, -a])
             status = self._series_trading_status(spread, a, zero_ratio)
             pairs_status[cc] = status
         return pairs_status
@@ -134,7 +134,7 @@ class Trading(object):
         return pair_close, pairf_dict
 
     @staticmethod
-    def daily_pair_position_control(sk_price_1: float, sk_price_2: float, lmda: float, amount: float = 1e5):
+    def daily_pair_position_control(sk_price_1: float, sk_price_2: float, lmda: float, amount: float = 1e6):
         """
         sk_1持仓，sk_2持仓
         :param sk_price_1:
@@ -184,7 +184,7 @@ class Trading(object):
         writer.save()
         writer.close()
 
-    def position_control(self, logger, amount: float = 1e5):
+    def position_control(self, logger, amount: float = 1e6):
         pairs = self.pairs
         pairs_status = self.pairs_status
         price = self.price
@@ -295,7 +295,7 @@ class Trading(object):
         return rev_df
 
     @timer
-    def run(self, out_folder: str, amount: float = 1e5, zero_ratio: float = 1e-1):
+    def run(self, out_folder: str, amount: float = 1e6, zero_ratio: float = 1e-1):
         createFolder(out_folder)
 
         logger = logging.getLogger(__name__)

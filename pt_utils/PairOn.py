@@ -21,12 +21,12 @@ import itertools
 class PairOn(object):
 
     def __init__(self, end_date: str, freq: TradingFrequency = TradingFrequency.month, freq_num: int = -1,
-                 out_folder: str = 'fig/'):
+                 out_folder: str = 'fig/', pair_bar: float = 0.02):
         self.out_folder = out_folder
         createFolder(out_folder)
         self.start_date, self.end_date = start_end_period(end_date, freq, freq_num)
         self.pairs = None
-        self.bar = None
+        self.pair_bar = pair_bar
 
     @timer
     def stock_pool(self) -> list:
@@ -43,13 +43,13 @@ class PairOn(object):
 
         return list(stock_list)
 
-    def _pair_on(self, stock_list: list, mdate: str, pair_num: int = 20) -> (list, float):
+    def _pair_on(self, stock_list: list, mdate: str, pair_num: int = 20) -> list:
         """
         配对组
         :param stock_list:
         :param mdate:
         :param pair_num: list of tuples
-        :return:
+        :return: list of tuples
         """
         sk_tuple = tuple(stock_list)
         cov = PairTradingData.get_cov_data(mdate).set_index('factor').sort_index()
@@ -66,12 +66,14 @@ class PairOn(object):
 
         distance_series = pd.Series(distance_dict)
 
-        pair_num_bar = ceil(pair_num * 1.5)
+        # pair_num_bar = ceil(pair_num * 1.5)
 
+        pair_bar = self.pair_bar
+        pairs = distance_series[distance_series <= pair_bar].index.tolist()
         pairs = distance_series.nsmallest(pair_num).index.tolist()
-        bar = distance_series.nsmallest(pair_num_bar).iloc[-1]
+        # bar = distance_series.nsmallest(pair_num_bar).iloc[-1]
 
-        return pairs, bar
+        return pairs
 
     @timer
     def run_pairOn(self, pair_num: int = 20) -> (list, float):
@@ -82,10 +84,10 @@ class PairOn(object):
         """
         stock_list = self.stock_pool()
         _, mdate = PairTradingData.trading_date_between(self.start_date, self.end_date)
-        pairs, bar = self._pair_on(stock_list, mdate, pair_num)
-        self.pairs, self.bar = pairs, bar
+        pairs = self._pair_on(stock_list, mdate, pair_num)
+        self.pairs = pairs
 
-        return pairs, bar
+        return pairs
 
     @staticmethod
     def _calculate_cc_lmda(y: pd.Series, x: pd.Series) -> float:
@@ -131,5 +133,5 @@ if __name__ == '__main__':
     form_freq_num = -1
     c = 0.0015
     pt_db = PairOn(end_date, form_freq, form_freq_num)
-    pair, bar = pt_db.run_pairOn(pair_num)
+    pair = pt_db.run_pairOn(pair_num)
     pair_entry_dict = pt_db.run_opt_pair_entry_level(pair, c)
