@@ -17,7 +17,7 @@ warnings.filterwarnings('ignore')
 project_path = 'D:/courses/2022-2024FDU/COURCES/Dlab/intern/PairTrading/pt/'
 
 
-def create_sql_engine(db_name: str = project_path + 'pt_utils\PairTrading.db'):
+def create_sql_engine(db_name: str = project_path + 'PairTrading.db'):
     conn = sqlite3.connect(db_name)
     return conn
 
