@@ -178,7 +178,7 @@ class PairTradingData(object):
     @staticmethod
     def get_stock_close_adj(stock_list: tuple, start_date, end_date) -> pd.DataFrame:
         close_sql = f"""
-        select date, sid, adj_factor * close AS close_adj
+        select date, sid, close AS close_adj
         from quote
         where date between '{start_date}' and '{end_date}'
           and sid in {str(stock_list)};

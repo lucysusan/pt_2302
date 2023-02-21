@@ -11,7 +11,7 @@ from pt_utils.function import timer, calculate_single_distance_value, TradingFre
     visualize_price_spread
 from CommonUse.funcs import createFolder
 from sklearn.linear_model import LinearRegression
-from OUProcess import OUProcess
+from pt_utils.OUProcess import OUProcess
 import pandas as pd
 from math import ceil
 import itertools

@@ -4,58 +4,20 @@ Created on 2023/2/2 14:56
 
 @author: Susan
 """
-import datetime
 import itertools
 import warnings
 from dataclasses import dataclass
-import pyfolio as pf
-
+from pt_utils.function import timer, date_Opt_year, date_Opt_month
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from CommonUse.funcs import read_pkl, createFolder
-from dateutil.relativedelta import relativedelta
-from scipy.special import erfi
 from sklearn.linear_model import LinearRegression
 from tqdm import tqdm
 
 warnings.filterwarnings('ignore')
 plt.rcParams['axes.unicode_minus'] = False
 plt.rcParams['font.sans-serif'] = ['FangSong']
-
-start_date = '2010-01-04'
-end_date = '2022-11-29'
-
-
-def timer(func):
-    """
-    计时装饰器
-    :param func:
-    :return:
-    """
-
-    def func_wrapper(*args, **kwargs):
-        from time import time
-        time_start = time()
-        result = func(*args, **kwargs)
-        time_end = time()
-        time_spend = time_end - time_start
-        print('\n{0} cost time {1} s\n'.format(func.__name__, time_spend))
-        return result
-
-    return func_wrapper
-
-
-def date_Opt_year(date: str, years: int):
-    d = datetime.datetime.strptime(date, '%Y-%m-%d')
-    d_y = (d - relativedelta(years=years)).strftime('%Y-%m-%d')
-    return d_y
-
-
-def date_Opt_month(date: str, months: int):
-    d = datetime.datetime.strptime(date, '%Y-%m-%d')
-    d_y = (d - relativedelta(months=months)).strftime('%Y-%m-%d')
-    return d_y
 
 
 # %% OU PROCESS

@@ -23,9 +23,6 @@ from pt_utils.get_data_sql import PairTradingData
 warnings.filterwarnings('ignore')
 
 
-# TODO: getLogger的作用
-
-
 class Trading(object):
 
     def __init__(self, pairs_entry_dict: dict, pair_bar: float, start_date: str,
@@ -52,15 +49,13 @@ class Trading(object):
         createFolder(out_folder)
 
     @staticmethod
-    def _series_trading_status(series: pd.Series, a: float, zero_ratio: float = 1e-1) -> pd.Series:
+    def _series_trading_status(series: pd.Series, a: float) -> pd.Series:
         """
         对每一个对数价差序列, 返回交易状态序列
         :param series:
         :param a:
-        :param zero_ratio: 判定平仓bar = a * zero_ratio
         :return:
         """
-        zero_bar = a * zero_ratio
         index_list = series.index
         status = pd.Series(index=index_list, data=0)
         abs_series = abs(series)
@@ -79,11 +74,10 @@ class Trading(object):
 
         return status
 
-    def _trading_status(self, pairs: list, zero_ratio: float = 1e-1):
+    def _trading_status(self, pairs: list):
         """
         每个交易日配对组的交易状态(open,close)
         :param pairs:
-        :param zero_ratio:
         :return:
         """
         price = self.price
@@ -100,7 +94,7 @@ class Trading(object):
 
             spread = price_pivot.apply(lambda x: np.log(x[cc[0]]) - np.log(lmda * x[cc[1]]), axis=1)
             visualize_spread(cc, spread, self.out_folder + f'trans_{str(cc)}.jpg', [a, 0, -a])
-            status = self._series_trading_status(spread, a, zero_ratio)
+            status = self._series_trading_status(spread, a)
             pairs_status[cc] = status
         return pairs_status
 
@@ -152,12 +146,12 @@ class Trading(object):
         else:
             return floor(am_2 / lmda), -am_2
 
-    def run_open_close(self, zero_ratio: float = 1e-1):
+    def run_open_close(self):
         pairs = self.pairs
         pair_bar = self.pair_bar
         pairf_dict = dict(zip(pairs, [0] * len(pairs)))
 
-        pairs_status = self._trading_status(pairs, zero_ratio)
+        pairs_status = self._trading_status(pairs)
         tds_list = self.tds_list
 
         for i, td in enumerate(tds_list):
@@ -262,11 +256,11 @@ class Trading(object):
             am_df.loc[:, (cc, 'sk_1_volume')] = am_df.loc[:, (cc, 'sk_1_volume')].fillna(method='ffill')
             am_df.loc[:, (cc, 'sk_2_volume')] = am_df.loc[:, (cc, 'sk_2_volume')].fillna(method='ffill')
 
-            na_m1 = am_df[(cc,)]['sk_1_volume'] * am_df[(cc,)]['sk_1_close'].shift(1)
+            na_m1 = abs(am_df[(cc,)]['sk_1_volume'] * am_df[(cc,)]['sk_1_close'].shift(1))
             am_df.loc[:, (cc, 'money_occupied_1')] = am_df.loc[:, (cc, 'money_occupied_1')].apply(
                 lambda x: na_m1[x.name] if np.isnan(x.values[0]) else x.values[0], axis=1)
             # am_df.loc[:, (cc, 'money_occupied_1')] = am_df.loc[:, (cc, 'money_occupied_1')].fillna(na_m1)
-            na_m2 = am_df[(cc,)]['sk_2_volume'] * am_df[(cc,)]['sk_2_close'].shift(1)
+            na_m2 = abs(am_df[(cc,)]['sk_2_volume'] * am_df[(cc,)]['sk_2_close'].shift(1))
             am_df.loc[:, (cc, 'money_occupied_2')] = am_df.loc[:, (cc, 'money_occupied_2')].apply(
                 lambda x: na_m2[x.name] if np.isnan(x.values[0]) else x.values[0], axis=1)
             # am_df[(cc,)]['money_occupied_1'].fillna(
@@ -275,7 +269,9 @@ class Trading(object):
             #     am_df[(cc,)]['sk_2_volume'] * am_df[(cc,)]['sk_2_close'].shift(1))
 
             am_df.loc[:, (cc, 'money_occupied_1')] = am_df.loc[:, (cc, 'money_occupied_1')].replace({0: 1})
+            am_df.loc[:, (cc, 'money_occupied_1')] = am_df.loc[:, (cc, 'money_occupied_1')].fillna(1)
             am_df.loc[:, (cc, 'money_occupied_2')] = am_df.loc[:, (cc, 'money_occupied_2')].replace({0: 1})
+            am_df.loc[:, (cc, 'money_occupied_2')] = am_df.loc[:, (cc, 'money_occupied_2')].fillna(1)
 
         return am_df
 
@@ -295,7 +291,7 @@ class Trading(object):
         return rev_df
 
     @timer
-    def run(self, out_folder: str, amount: float = 1e6, zero_ratio: float = 1e-1):
+    def run(self, out_folder: str, amount: float = 1e6):
         createFolder(out_folder)
 
         logger = logging.getLogger(__name__)
@@ -307,7 +303,7 @@ class Trading(object):
 
         logger.info(
             f'---------------------------START_DATE\t{self.start_date}\tEND_DATE\t{self.end_date}---------------------------')
-        self.run_open_close(zero_ratio)
+        self.run_open_close()
         am_df = self.position_control(logger, amount)
         self.write_sheet_pairs(am_df, out_folder)
         rev_df = self.calculate_pairs_rev(am_df, out_folder)
@@ -326,5 +322,6 @@ class Trading(object):
         rev = flow_table['mean'].dropna()
         index_df = PairTradingData.get_index_data(self.start_date, self.end_date, index_sid)
         index_df.index = pd.to_datetime(index_df.index)
+        index_df = index_df.pct_change()
         bm_data = pd.merge(rev, index_df, 'left', left_index=True, right_index=True)
         pf.create_full_tear_sheet(bm_data['mean'], benchmark_rets=bm_data[index_sid])

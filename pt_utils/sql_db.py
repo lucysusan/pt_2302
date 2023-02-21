@@ -10,13 +10,16 @@ import sqlite3
 import pandas as pd
 from CommonUse.funcs import read_pkl
 
-base_route = '../raw/base/'
-print(file_list := os.listdir(base_route))
+#
+base_route = './raw/'
+tds = read_pkl(base_route + 'tds.pkl')
+tds_df = pd.DataFrame({'trading_date': tds})
 
-quote = pd.read_pickle(base_route + 'quote')
-conn = sqlite3.connect('PairTrading.db')
-quote.to_sql('quote', conn, if_exists='replace')
-status = read_pkl(base_route + 'ashare_universe_status.pkl')
+# %%
+project_route = 'D:\\courses\\2022-2024FDU\\COURCES\\Dlab\\intern\\PairTrading\\pt'
+
+conn = sqlite3.connect(project_route+'\\pt_utils\\PairTrading.db')
+tds_df.to_sql('tds', conn, if_exists='replace')
 
 
 def raw2sql(file_name: str, table_name: str, route: str = base_route):
@@ -28,12 +31,13 @@ def raw2sql(file_name: str, table_name: str, route: str = base_route):
     print(f'{file_name} to {table_name}\t Done!')
 
 
-raw2sql('ashare_universe_status.pkl', 'status')
-raw2sql('cne6_exposure.pkl', 'cne6_exposure')
-raw2sql('factor_cov.pkl', 'factor_cov')
-raw2sql('index_quote.pkl', 'index_quote')
-raw2sql('mkt_cap', 'mkt_cap')
-raw2sql('quote', 'quote')
-raw2sql('stock_sid_name.pkl', 'stock_sid_name')
+raw2sql('tds.pkl', 'tds')
+# raw2sql('ashare_universe_status.pkl', 'status')
+# raw2sql('cne6_exposure.pkl', 'cne6_exposure')
+# raw2sql('factor_cov.pkl', 'factor_cov')
+# raw2sql('index_quote.pkl', 'index_quote')
+# raw2sql('mkt_cap', 'mkt_cap')
+# raw2sql('quote', 'quote')
+# raw2sql('stock_sid_name.pkl', 'stock_sid_name')
 
 conn.close()
