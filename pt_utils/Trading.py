@@ -3,7 +3,6 @@
 Created on 2023/2/14 8:44
 
 @author: Susan
-TODO:
  - PARAM_FILE: LOG - FILE
  - 均值回复点：zero-crossing的时间点，看signal
  - 每日检测：超过 check_day_length 天数低于pair_bar则清空这两支股票
@@ -17,7 +16,7 @@ import numpy as np
 import pandas as pd
 import pyfolio as pf
 from CommonUse.funcs import createFolder
-
+from tqdm import tqdm
 from pt_utils.function import TradingFrequency, start_end_period, pairs_sk_set, calculate_single_distance_value, timer, \
     visualize_spread
 from pt_utils.get_data_sql import PairTradingData
@@ -36,7 +35,7 @@ class Trading(object):
         初始化，得到trading_time_list以及最后一个交易日
         :param start_date:
         :param freq: DEFAULT，按月交易
-        TODO: 按月每日检查是否仍为配对组，每日交易是否发生，交易状态是否改变，每个交易日的revenue是多少；
+        按月每日检查是否仍为配对组，每日交易是否发生，交易状态是否改变，每个交易日的revenue是多少；
          - 每个交易日顺次遍历，再按照配对组的顺序顺次遍历
             - 得到因子在该交易日的数据，和因子的协方差数据，使用distance_value得到配对组的距离值，若低于bar则将配对组距离dict的value值+1
                 - 剔除value值>=2的配对组(后续不再出现)，并且跳过下一步操作的执行
@@ -91,19 +90,18 @@ class Trading(object):
         price = self.price
         pairs_entry_dict = self.pairs_entry_dict
         pairs_status = pd.DataFrame(index=self.tds_list)
-        # TODO: visualize here
         for cc in pairs:
             lmda = pairs_entry_dict[cc]['lmda']
             a = pairs_entry_dict[cc]['entry']
             price_pair = price[price['sid'].isin(list(cc))]
 
             price_pivot = price_pair.pivot(index='date', columns='sid', values='vwap_adj')
-            # TODO: price_pivot here account for latter position control
 
             spread = price_pivot.apply(lambda x: np.log(x[cc[0]]) - np.log(lmda * x[cc[1]]), axis=1)
             visualize_spread(cc, spread, self.out_folder + f'trans_{str(cc)}.jpg', [a, 0, -a])
             status = self._series_trading_status(spread, a)
             pairs_status[cc] = status
+
         return pairs_status
 
     @staticmethod
@@ -167,10 +165,9 @@ class Trading(object):
             for cc in pairs_close:
                 cc_status = pairs_status[cc]
 
-                if sum(cc_status[:td]):
-                    cc_status[td] = -1
+                cc_status[td] = -1 if sum(cc_status[:tds_list[i-1]]) else 0
 
-                if i + 1 < len(tds_list):
+                if i+1 < len(tds_list):
                     cc_status[tds_list[i + 1]:] = 0
 
                 pairs_status[cc] = cc_status
@@ -216,7 +213,7 @@ class Trading(object):
             am_df.loc[tds_list[0], (cc, 'sk_2_pct')] = (close_pivot.loc[tds_list[0], cc[1]] - price_pivot.loc[
                 tds_list[0], cc[1]]) / price_pivot.loc[tds_list[0], cc[1]]
 
-        for cc in pairs:
+        for cc in tqdm(pairs):
             status = pairs_status[cc]
             open = status[status == 1].index.tolist()
             close = status[status == -1].index.tolist()
@@ -262,7 +259,7 @@ class Trading(object):
                 am_df.loc[td, (cc, 'money_occupied_2')] = 0
                 am_df.loc[td, (cc, 'in_flow')] = in_flow_close
 
-                logger.info(f'CLOSE - {cc} - {td} - {(am_1, am_2)} - {in_flow_close}')
+                logger.info(f'CLOSE - {cc} - {td} - {(-am_1, -am_2)} - {in_flow_close}')
 
             am_df.loc[:, (cc, 'sk_1_volume')] = am_df.loc[:, (cc, 'sk_1_volume')].fillna(method='ffill')
             am_df.loc[:, (cc, 'sk_2_volume')] = am_df.loc[:, (cc, 'sk_2_volume')].fillna(method='ffill')
@@ -270,14 +267,9 @@ class Trading(object):
             na_m1 = abs(am_df[(cc,)]['sk_1_volume'] * am_df[(cc,)]['sk_1_close'].shift(1))
             am_df.loc[:, (cc, 'money_occupied_1')] = am_df.loc[:, (cc, 'money_occupied_1')].apply(
                 lambda x: na_m1[x.name] if np.isnan(x.values[0]) else x.values[0], axis=1)
-            # am_df.loc[:, (cc, 'money_occupied_1')] = am_df.loc[:, (cc, 'money_occupied_1')].fillna(na_m1)
             na_m2 = abs(am_df[(cc,)]['sk_2_volume'] * am_df[(cc,)]['sk_2_close'].shift(1))
             am_df.loc[:, (cc, 'money_occupied_2')] = am_df.loc[:, (cc, 'money_occupied_2')].apply(
                 lambda x: na_m2[x.name] if np.isnan(x.values[0]) else x.values[0], axis=1)
-            # am_df[(cc,)]['money_occupied_1'].fillna(
-            #     am_df[(cc,)]['sk_1_volume'] * am_df[(cc,)]['sk_1_close'].shift(1),inplace=True)
-            # am_df.loc[:, (cc, 'money_occupied_2')] = am_df.loc[:, (cc, 'money_occupied_2')].fillna(
-            #     am_df[(cc,)]['sk_2_volume'] * am_df[(cc,)]['sk_2_close'].shift(1))
 
             am_df.loc[:, (cc, 'money_occupied_1')] = am_df.loc[:, (cc, 'money_occupied_1')].replace({0: 1})
             am_df.loc[:, (cc, 'money_occupied_1')] = am_df.loc[:, (cc, 'money_occupied_1')].fillna(1)
@@ -291,7 +283,7 @@ class Trading(object):
         rev_df = pd.DataFrame(index=self.tds_list, columns=pairs)
         for cc in pairs:
             df = am_df[(cc,)]
-            # TODO: if there is Zero, set zero here
+            # if there is Zero, set dividend to 1
             rev = (np.sign(df['sk_1_volume']) * df['money_occupied_1'] * df['sk_1_pct'] + np.sign(df['sk_2_volume']) *
                    df['money_occupied_2'] * df['sk_2_pct']) / (df['money_occupied_1'] + df['money_occupied_2'])
             rev_df[cc] = rev

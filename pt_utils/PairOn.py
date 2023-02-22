@@ -15,6 +15,7 @@ from pt_utils.OUProcess import OUProcess
 from pt_utils.function import timer, calculate_single_distance_value, TradingFrequency, start_end_period, \
     visualize_price_spread
 from pt_utils.get_data_sql import PairTradingData
+from tqdm import tqdm
 
 
 # %% PairOn
@@ -28,7 +29,6 @@ class PairOn(object):
         self.pairs = None
         self.pair_bar = pair_bar
 
-    @timer
     def stock_pool(self) -> list:
         """
         股票池
@@ -55,22 +55,16 @@ class PairOn(object):
         factor = PairTradingData.get_stock_factor(sk_tuple, mdate).set_index('sid')
         cov_matrix = np.matrix(cov)
         combinations = list(itertools.combinations(stock_list, 2))
-        # distance_df = pd.DataFrame(index=stock_list, columns=stock_list)
         distance_dict = {}
 
         for sk_com in combinations:
             distance = calculate_single_distance_value(sk_com, factor, cov_matrix)
-            # distance_df.loc[sk_com] = distance
             distance_dict.update({sk_com: distance})
 
         distance_series = pd.Series(distance_dict)
 
-        # pair_num_bar = ceil(pair_num * 1.5)
-
         pair_bar = self.pair_bar
         pairs = distance_series[distance_series <= pair_bar].index.tolist()
-        # pairs = distance_series.nsmallest(pair_num).index.tolist()
-        # bar = distance_series.nsmallest(pair_num_bar).iloc[-1]
 
         return pairs
 
@@ -102,14 +96,15 @@ class PairOn(object):
         spread_array = spread.values
         ou = OUProcess(spread_array)
 
+        price_pivot[cc[1]] = lmda * price_pivot[cc[1]]
         if ou.exists:
             a, cycle = ou.run_ouOpt(c)
             visualize_price_spread(price_pivot, spread, self.out_folder + f'form_{str(cc)}.jpg', str(cc), [a, 0, -a])
         else:
             a, cycle = None, None
+            
         return lmda, a, cycle
 
-    @timer
     def run_opt_pair_entry_level(self, pairs: list = None, c=0.0015):
         """
         配对组，配对组系数，对数价差买入阈值，一次平仓的期望时间长度
@@ -119,19 +114,20 @@ class PairOn(object):
         """
         price = PairTradingData.get_pair_origin_data(pairs, self.start_date, self.end_date)
         pairs_entry_dict = {}
-        for cc in pairs:
+        for cc in tqdm(pairs):
             price_pair = price[price['sid'].isin(list(cc))]
             lmda, best_a, cycle = self._single_entry_level(price_pair, c)
             if best_a is not None:
                 pairs_entry_dict.update({cc: {'lmda': lmda, 'entry': best_a, 'cycle': cycle}})
+        self.pairs = list(pairs_entry_dict.keys())
         return pairs_entry_dict
 
 
-if __name__ == '__main__':
-    end_date = '2018-07-01'
-    form_freq = TradingFrequency.month
-    form_freq_num = -1
-    c = 0.0015
-    pt_db = PairOn(end_date, form_freq, form_freq_num)
-    pair = pt_db.run_pairOn()
-    pair_entry_dict = pt_db.run_opt_pair_entry_level(pair, c)
+# if __name__ == '__main__':
+#     end_date = '2018-07-01'
+#     form_freq = TradingFrequency.month
+#     form_freq_num = -1
+#     c = 0.0015
+#     pt_db = PairOn(end_date, form_freq, form_freq_num)
+#     pair = pt_db.run_pairOn()
+#     pair_entry_dict = pt_db.run_opt_pair_entry_level(pair, c)

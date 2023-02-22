@@ -3,6 +3,7 @@
 Created on 2023/2/16 13:32
 
 @author: Susan
+TODO: 重新open时的amount是否应该变换，o.w.Trading's c seems useless
 """
 import configparser
 import os
@@ -12,10 +13,11 @@ import pyfolio as pf
 
 from pt_utils.PairOn import PairOn
 from pt_utils.Trading import Trading, TradingFrequency
-from pt_utils.function import get_current_date, start_end_period
+from pt_utils.function import get_current_date, start_end_period, timer
 from pt_utils.get_data_sql import PairTradingData
 
 project_path = os.getcwd()
+# project_path = 'D:\\courses\\2022-2024FDU\\COURCES\\Dlab\\intern\\PairTrading\\pt\\'
 
 config_file = project_path + '/pt_utils/parameter'
 
@@ -63,16 +65,18 @@ def PairTrading_once(form_end=form_end, form_freq=form_freq, form_freq_num=form_
     return bm_data, trade.end_date
 
 
+@timer
 def PairTrading(start_date=start_date, end_date=end_date, form_freq=form_freq, form_freq_num=form_freq_num,
                 trans_freq=trans_freq, trans_freq_num=trans_freq_num, pair_bar=pair_bar, c=c, amount=amount,
                 index_df=index_df, index_sid=index_sid, project_path=project_path, disp: bool = False):
     today = get_current_date()
-    _, form_end_start = start_end_period(start_date, form_freq, form_freq_num)
+    _, form_end_start = start_end_period(start_date, form_freq, -form_freq_num)
     trans_start_end, _ = start_end_period(end_date, trans_freq, -trans_freq_num)
     form_end = form_end_start
     trans_start = form_end_start
     bm_df = pd.DataFrame(columns=['ret', index_sid])
     while trans_start <= trans_start_end:
+        print(trans_start, '-------------------------------------------------------')
         bm_data, form_start = PairTrading_once(form_end, form_freq, form_freq_num, project_path, pair_bar, c,
                                                trans_start,
                                                trans_freq, trans_freq_num, amount, index_df, index_sid, disp)
@@ -81,5 +85,9 @@ def PairTrading(start_date=start_date, end_date=end_date, form_freq=form_freq, f
         trans_start = form_end
 
     pf.create_returns_tear_sheet(bm_df['ret'], benchmark_rets=bm_df[index_sid])
-    bm_df.to_csv(f'{project_path}/output/{today}/ret_index.csv')
+    bm_df.to_csv(f'{project_path}/output/{today}/{start_date}_{end_date}_ret_index.csv')
     return bm_df
+
+
+# if __name__ == '__main__':
+#     bm_data = PairTrading_once()

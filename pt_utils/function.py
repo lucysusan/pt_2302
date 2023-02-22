@@ -170,9 +170,9 @@ def visualize_spread(cc, spread, outer_fig, hline=None):
     plt.close()
 
 
-if __name__ == '__main__':
-    date_str = '2018-01-01'
-    print(date_Opt_day(date_str, 1))
-    print(date_Opt_month(date_str, 1))
-    print(date_Opt_year(date_str, 1))
-    print(date_Opt_quarter(date_str, 1))
+# if __name__ == '__main__':
+#     date_str = '2018-01-01'
+#     print(date_Opt_day(date_str, 1))
+#     print(date_Opt_month(date_str, 1))
+#     print(date_Opt_year(date_str, 1))
+#     print(date_Opt_quarter(date_str, 1))
