@@ -284,7 +284,7 @@ class Trading(object):
         for cc in pairs:
             df = am_df[(cc,)]
             # if there is Zero, set dividend to 1
-            rev = (np.sign(df['sk_1_volume']) * df['money_occupied_1'] * df['sk_1_pct'] + np.sign(df['sk_2_volume']) *
+            rev = 2 * (np.sign(df['sk_1_volume']) * df['money_occupied_1'] * df['sk_1_pct'] + np.sign(df['sk_2_volume']) *
                    df['money_occupied_2'] * df['sk_2_pct']) / (df['money_occupied_1'] + df['money_occupied_2'])
             rev_df[cc] = rev
 
