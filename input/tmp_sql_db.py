@@ -18,7 +18,7 @@ tds_df = pd.DataFrame({'trading_date': tds})
 # %%
 project_route = 'D:\\courses\\2022-2024FDU\\COURCES\\Dlab\\intern\\PairTrading\\pt'
 
-conn = sqlite3.connect(project_route+'\\PairTrading.db')
+conn = sqlite3.connect(project_route+'\\input\\PairTrading.db')
 tds_df.to_sql('tds', conn, if_exists='replace')
 
 
