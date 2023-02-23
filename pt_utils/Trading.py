@@ -15,10 +15,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pyfolio as pf
-from CommonUse.funcs import createFolder
 from tqdm import tqdm
+
 from pt_utils.function import TradingFrequency, start_end_period, pairs_sk_set, calculate_single_distance_value, timer, \
-    visualize_spread
+    visualize_spread, createFolder
 from pt_utils.get_data_sql import PairTradingData
 
 warnings.filterwarnings('ignore')
@@ -165,9 +165,9 @@ class Trading(object):
             for cc in pairs_close:
                 cc_status = pairs_status[cc]
 
-                cc_status[td] = -1 if sum(cc_status[:tds_list[i-1]]) else 0
+                cc_status[td] = -1 if sum(cc_status[:tds_list[i - 1]]) else 0
 
-                if i+1 < len(tds_list):
+                if i + 1 < len(tds_list):
                     cc_status[tds_list[i + 1]:] = 0
 
                 pairs_status[cc] = cc_status
@@ -284,8 +284,9 @@ class Trading(object):
         for cc in pairs:
             df = am_df[(cc,)]
             # if there is Zero, set dividend to 1
-            rev = 2 * (np.sign(df['sk_1_volume']) * df['money_occupied_1'] * df['sk_1_pct'] + np.sign(df['sk_2_volume']) *
-                   df['money_occupied_2'] * df['sk_2_pct']) / (df['money_occupied_1'] + df['money_occupied_2'])
+            rev = 2 * (np.sign(df['sk_1_volume']) * df['money_occupied_1'] * df['sk_1_pct'] + np.sign(
+                df['sk_2_volume']) *
+                       df['money_occupied_2'] * df['sk_2_pct']) / (df['money_occupied_1'] + df['money_occupied_2'])
             rev_df[cc] = rev
 
         rev_df['mean'] = rev_df.mean(axis=1)

@@ -5,6 +5,7 @@ Created on 2023/2/13 15:26
 @author: Susan
 """
 import datetime
+import os
 import warnings
 from enum import Enum
 
@@ -22,6 +23,16 @@ factor_name = ['beta', 'btop', 'divyild', 'earnqlty', 'earnvar', 'earnyild', 'gr
 factor_name.sort()
 start_date = '2010-01-04'
 end_date = '2022-11-29'
+
+
+def createFolder(folder_route: str) -> None:
+    """
+    判断该路径文件夹是否存在，如果不存在，则创建该文件夹
+    :param folder_route: 文件夹路径，以/结尾
+    :return:
+    """
+    if not os.path.exists(folder_route):
+        os.makedirs(folder_route)
 
 
 def timer(func):
@@ -168,7 +179,6 @@ def visualize_spread(cc, spread, outer_fig, hline=None):
                 plt.axhline(y=y, color="grey", linestyle=":")
     plt.savefig(outer_fig, dpi=300)
     plt.close()
-
 
 # if __name__ == '__main__':
 #     date_str = '2018-01-01'

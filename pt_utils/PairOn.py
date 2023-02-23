@@ -8,14 +8,13 @@ import itertools
 
 import numpy as np
 import pandas as pd
-from CommonUse.funcs import createFolder
 from sklearn.linear_model import LinearRegression
+from tqdm import tqdm
 
 from pt_utils.OUProcess import OUProcess
 from pt_utils.function import timer, calculate_single_distance_value, TradingFrequency, start_end_period, \
-    visualize_price_spread
+    visualize_price_spread, createFolder
 from pt_utils.get_data_sql import PairTradingData
-from tqdm import tqdm
 
 
 # %% PairOn
@@ -102,7 +101,7 @@ class PairOn(object):
             visualize_price_spread(price_pivot, spread, self.out_folder + f'form_{str(cc)}.jpg', str(cc), [a, 0, -a])
         else:
             a, cycle = None, None
-            
+
         return lmda, a, cycle
 
     def run_opt_pair_entry_level(self, pairs: list = None, c=0.0015):
@@ -121,7 +120,6 @@ class PairOn(object):
                 pairs_entry_dict.update({cc: {'lmda': lmda, 'entry': best_a, 'cycle': cycle}})
         self.pairs = list(pairs_entry_dict.keys())
         return pairs_entry_dict
-
 
 # if __name__ == '__main__':
 #     end_date = '2018-07-01'
