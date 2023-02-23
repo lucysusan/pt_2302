@@ -18,8 +18,8 @@ from pt_utils.Trading import Trading, TradingFrequency
 from pt_utils.function import get_current_date, start_end_period, timer
 from pt_utils.get_data_sql import PairTradingData
 
-# project_path = os.getcwd()
-project_path = 'D:\\courses\\2022-2024FDU\\COURCES\\Dlab\\intern\\PairTrading\\pt\\'
+project_path = os.getcwd()
+# project_path = 'D:\\courses\\2022-2024FDU\\COURCES\\Dlab\\intern\\PairTrading\\pt\\'
 
 config_file = project_path + '/input/parameter.ini'
 
