@@ -79,6 +79,9 @@ def PairTrading(start_date=start_date, end_date=end_date, form_freq=form_freq, f
     trans_start = form_end_start
     bm_df = pd.DataFrame(columns=['ret', index_sid])
 
+    if trans_start > trans_start_end:
+        return None
+
     while trans_start <= trans_start_end:
         print(trans_start, '-------------------------------------------------------')
         bm_data, trans_start = PairTrading_once(form_end, form_freq, form_freq_num, project_path, pair_bar, c,
@@ -94,5 +97,6 @@ def PairTrading(start_date=start_date, end_date=end_date, form_freq=form_freq, f
 
     return bm_df
 
+
 if __name__ == '__main__':
-    bm_data = PairTrading_once()
+    bm_data = PairTrading()

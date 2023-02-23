@@ -160,7 +160,7 @@ class Trading(object):
         pairs_status = self._trading_status(pairs)
         tds_list = self.tds_list
 
-        for i, td in enumerate(tds_list):
+        for i, td in tqdm(enumerate(tds_list)):
             pairs_close, pairf_dict = self.daily_pair_checking(td, pair_bar, pairf_dict)
             for cc in pairs_close:
                 cc_status = pairs_status[cc]
