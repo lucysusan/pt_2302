@@ -90,10 +90,11 @@ def PairTrading(start_date=start_date, end_date=end_date, form_freq=form_freq, f
         bm_df = pd.concat([bm_df, bm_data])
         form_end = trans_start
 
-    pf.create_returns_tear_sheet(bm_df['ret'], benchmark_rets=bm_df[index_sid])
-
     today = get_current_date()
     bm_df.to_csv(f'{project_path}/output/{today}/{start_date}_{end_date}_ret_index.csv')
+    bm_df.to_pickle(f'{project_path}/output/{today}/{start_date}_{end_date}_ret_index')
+
+    pf.create_returns_tear_sheet(bm_df['ret'], benchmark_rets=bm_df[index_sid])
 
     return bm_df
 

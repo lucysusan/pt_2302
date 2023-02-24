@@ -153,7 +153,12 @@ class PairTradingData(object):
         :return:
         """
         select_stmt = ','.join(factor_name)
-        stock_tuple_str = str(stock_list)
+        if not len(stock_list):
+            return pd.DataFrame()
+        elif len(stock_list) == 1:
+            stock_tuple_str = f"""('{stock_list[0]}')"""
+        else:
+            stock_tuple_str = str(stock_list)
         factor_sql = f"""
             select sid, {select_stmt}
             from cne6_exposure
