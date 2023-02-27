@@ -134,23 +134,18 @@ class Trading(object):
         return pair_close, pairf_dict
 
     @staticmethod
-    def daily_pair_position_control(sk_price_1: float, sk_price_2: float, lmda: float, amount: float = 1e6):
+    def daily_pair_position_control(sk_price_1: float, sk_price_2: float, lmda: float):
         """
         sk_1持仓，sk_2持仓
         :param sk_price_1:
         :param sk_price_2:
         :param lmda:
-        :param amount:
         :return: 买入-正持仓，卖出-负持仓
         """
-        sk_1 = sk_price_1 * 100
-        sk_2 = sk_price_2 * 100
-        am_1 = floor(amount / sk_1)
-        am_2 = floor(amount / sk_2)
-        if am_1 * lmda <= am_2:
-            return -am_1, floor(am_1 * lmda)
+        if sk_price_2 * lmda <= sk_price_1:
+            return -1, 1
         else:
-            return floor(am_2 / lmda), -am_2
+            return 1, -1
 
     def run_open_close(self):
         pairs = self.pairs
@@ -196,23 +191,22 @@ class Trading(object):
 
         columns = pd.MultiIndex.from_product(
             [pairs,
-             ['sk_1_close', 'sk_1_pct', 'sk_1_volume', 'money_occupied_1', 'sk_2_close', 'sk_2_pct', 'sk_2_volume',
-              'money_occupied_2', 'in_flow']])
+             ['sk_1_pct', 'sk_1_position', 'sk_2_pct', 'sk_2_position', 'nv_1', 'nv_2', 'nv', 'ret']])
         am_df = pd.DataFrame(columns=columns, index=tds_list)
+        # TODO: 根据status，将1--1间填充pct_change
 
         # fill in close data and the first trading date
         for cc in pairs:
-            am_df.loc[:, (cc, 'sk_1_close')] = close_pivot[cc[0]]
-            am_df.loc[:, (cc, 'sk_2_close')] = close_pivot[cc[1]]
             am_df.loc[:, (cc, 'sk_1_pct')] = pct[cc[0]]
             am_df.loc[:, (cc, 'sk_2_pct')] = pct[cc[1]]
-            am_df.loc[tds_list[0], (cc, 'sk_1_volume')] = 0
-            am_df.loc[tds_list[0], (cc, 'sk_2_volume')] = 0
+            am_df.loc[tds_list[0], (cc, 'sk_1_position')] = 0
+            am_df.loc[tds_list[0], (cc, 'sk_2_position')] = 0
             am_df.loc[tds_list[0], (cc, 'sk_1_pct')] = (close_pivot.loc[tds_list[0], cc[0]] - price_pivot.loc[
                 tds_list[0], cc[0]]) / price_pivot.loc[tds_list[0], cc[0]]
             am_df.loc[tds_list[0], (cc, 'sk_2_pct')] = (close_pivot.loc[tds_list[0], cc[1]] - price_pivot.loc[
                 tds_list[0], cc[1]]) / price_pivot.loc[tds_list[0], cc[1]]
 
+        # TODO: lmda 和 ret 无关
         for cc in tqdm(pairs):
             status = pairs_status[cc]
             open = status[status == 1].index.tolist()
@@ -222,77 +216,59 @@ class Trading(object):
                 price_1 = price_pivot.loc[td, cc[0]]
                 price_2 = price_pivot.loc[td, cc[1]]
 
-                am_1, am_2 = self.daily_pair_position_control(price_1, price_2, self.pairs_entry_dict[cc]['lmda'],
-                                                              amount)
-                in_flow = - (am_1 * price_1 * 100 + am_2 * price_2 * 100) - c * (
-                        abs(am_1 * price_1 * 100) + abs(am_2 * price_2 * 100))
-                am_df.loc[td, (cc, 'sk_1_volume')] = am_1
-                am_df.loc[td, (cc, 'sk_2_volume')] = am_2
+                am_1, am_2 = self.daily_pair_position_control(price_1, price_2, self.pairs_entry_dict[cc]['lmda'])
+                am_df.loc[td, (cc, 'sk_1_position')] = am_1
+                am_df.loc[td, (cc, 'sk_2_position')] = am_2
                 am_df.loc[td, (cc, 'sk_1_pct')] = (close_pivot.loc[td, cc[0]] - price_pivot.loc[td, cc[0]]) / \
                                                   price_pivot.loc[td, cc[0]]
                 am_df.loc[td, (cc, 'sk_2_pct')] = (close_pivot.loc[td, cc[1]] - price_pivot.loc[td, cc[1]]) / \
                                                   price_pivot.loc[td, cc[1]]
-                am_df.loc[td, (cc, 'in_flow')] = in_flow
-                am_df.loc[td, (cc, 'money_occupied_1')] = abs(am_1 * price_1 * 100) * (1 + c)
-                am_df.loc[td, (cc, 'money_occupied_2')] = abs(am_2 * price_2 * 100) * (1 + c)
 
-                logger.info(f'OPEN - {cc} - {td} - {(am_1, am_2)} - {in_flow}')
+                logger.info(f'OPEN - {cc} - {td} - {(am_1, am_2)}')
 
             for i, td in enumerate(close):
-                am_1 = am_df.loc[open[i], (cc, 'sk_1_volume')].values[0]
-                am_2 = am_df.loc[open[i], (cc, 'sk_2_volume')].values[0]
-                in_flow = am_df.loc[open[i], (cc, 'in_flow')].values[0]
+                am_1 = am_df.loc[open[i], (cc, 'sk_1_position')].values[0]
+                am_2 = am_df.loc[open[i], (cc, 'sk_2_position')].values[0]
 
-                in_flow_close = am_1 * price_pivot.loc[td, cc[0]] * 100 + am_2 * price_pivot.loc[
-                    td, cc[1]] * 100 + in_flow - c * (
-                                        abs(am_1) * price_pivot.loc[td, cc[0]] * 100 + abs(am_2) * price_pivot.loc[
-                                    td, cc[1]] * 100)
                 i_list = tds_list.index(td)
                 am_df.loc[td, (cc, 'sk_1_pct')] = (price_pivot.loc[td, cc[0]] - close_pivot.loc[
                     tds_list[i_list], cc[0]]) / close_pivot.loc[tds_list[i_list], cc[0]]
                 am_df.loc[td, (cc, 'sk_2_pct')] = (price_pivot.loc[td, cc[1]] - close_pivot.loc[
                     tds_list[i_list], cc[1]]) / close_pivot.loc[tds_list[i_list], cc[1]]
 
-                am_df.loc[td, (cc, 'sk_1_volume')] = 0
-                am_df.loc[td, (cc, 'sk_2_volume')] = 0
-                am_df.loc[td, (cc, 'money_occupied_1')] = 0
-                am_df.loc[td, (cc, 'money_occupied_2')] = 0
-                am_df.loc[td, (cc, 'in_flow')] = in_flow_close
+                am_df.loc[td, (cc, 'sk_1_position')] = 0
+                am_df.loc[td, (cc, 'sk_2_position')] = 0
 
-                logger.info(f'CLOSE - {cc} - {td} - {(-am_1, -am_2)} - {in_flow_close}')
+                nv_df = am_df.loc[open[i]:td, (cc,)][(cc,)]
+                nv_df['nv_1'] = (nv_df['sk_1_pct'] + 1).cumprod()
+                nv_df['nv_2'] = (nv_df['sk_2_pct'] + 1).cumprod()
+                nv_df['nv'] = am_1 * nv_df['nv_1'] + am_2 * nv_df['nv_2']
+                nv_df['ret'] = nv_df['nv'].pct_change()
+                am_df.loc[open[i]:td, (cc,'nv_1')] = nv_df['nv_1']
+                am_df.loc[open[i]:td, (cc,'nv_2')] = nv_df['nv_2']
+                am_df.loc[open[i]:td, (cc, 'nv')] = nv_df['nv']
+                am_df.loc[open[i]:td, (cc, 'ret')] = nv_df['ret']
 
-            am_df.loc[:, (cc, 'sk_1_volume')] = am_df.loc[:, (cc, 'sk_1_volume')].fillna(method='ffill')
-            am_df.loc[:, (cc, 'sk_2_volume')] = am_df.loc[:, (cc, 'sk_2_volume')].fillna(method='ffill')
+                logger.info(f'CLOSE - {cc} - {td} - {(-am_1, -am_2)}')
 
-            na_m1 = abs(am_df[(cc,)]['sk_1_volume'] * am_df[(cc,)]['sk_1_close'].shift(1))
-            am_df.loc[:, (cc, 'money_occupied_1')] = am_df.loc[:, (cc, 'money_occupied_1')].apply(
-                lambda x: na_m1[x.name] if np.isnan(x.values[0]) else x.values[0], axis=1)
-            na_m2 = abs(am_df[(cc,)]['sk_2_volume'] * am_df[(cc,)]['sk_2_close'].shift(1))
-            am_df.loc[:, (cc, 'money_occupied_2')] = am_df.loc[:, (cc, 'money_occupied_2')].apply(
-                lambda x: na_m2[x.name] if np.isnan(x.values[0]) else x.values[0], axis=1)
+            am_df.loc[:, (cc, 'sk_1_position')] = am_df.loc[:, (cc, 'sk_1_position')].fillna(method='ffill')
+            am_df.loc[:, (cc, 'sk_2_position')] = am_df.loc[:, (cc, 'sk_2_position')].fillna(method='ffill')
 
-            am_df.loc[:, (cc, 'money_occupied_1')] = am_df.loc[:, (cc, 'money_occupied_1')].replace({0: 1})
-            am_df.loc[:, (cc, 'money_occupied_1')] = am_df.loc[:, (cc, 'money_occupied_1')].fillna(1)
-            am_df.loc[:, (cc, 'money_occupied_2')] = am_df.loc[:, (cc, 'money_occupied_2')].replace({0: 1})
-            am_df.loc[:, (cc, 'money_occupied_2')] = am_df.loc[:, (cc, 'money_occupied_2')].fillna(1)
+            am_df.loc[:, (cc, 'ret')] = am_df.loc[:, (cc, 'ret')].fillna(0)
 
         return am_df
 
     def calculate_pairs_rev(self, am_df, out_folder: str, rev_filename: str = 'rev_pair'):
         pairs = self.pairs
-        rev_df = pd.DataFrame(index=self.tds_list, columns=pairs)
+        ret_df = pd.DataFrame(index=self.tds_list, columns=pairs)
         for cc in pairs:
             df = am_df[(cc,)]
-            # if there is Zero, set dividend to 1
-            rev = 2 * (np.sign(df['sk_1_volume']) * df['money_occupied_1'] * df['sk_1_pct'] + np.sign(
-                df['sk_2_volume']) *
-                       df['money_occupied_2'] * df['sk_2_pct']) / (df['money_occupied_1'] + df['money_occupied_2'])
-            rev_df[cc] = rev
+            ret_df[cc] = df['ret']
 
-        rev_df['mean'] = rev_df.mean(axis=1)
-        rev_df.to_csv(out_folder + rev_filename + '.csv')
+        ret_df['mean'] = ret_df.mean(axis=1)
+        ret_df.to_csv(out_folder + rev_filename + '.csv')
 
-        return rev_df
+        return ret_df
 
     @timer
     def run(self, out_folder: str, amount: float = 1e6, c: float = 0.0015):

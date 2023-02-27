@@ -51,7 +51,7 @@ def PairTrading_once(form_end=form_end, form_freq=form_freq, form_freq_num=form_
                      trans_freq_num=trans_freq_num,
                      amount=amount, index_df=index_df, index_sid=index_sid, disp: bool = True):
     today = get_current_date()
-    trade_out_folder = f"""{project_path}/output/{today}/{form_end}_{form_freq_num}{str(form_freq).split('.')[-1]}_{trans_start}_{trans_freq_num}{str(trans_freq).split('.')[-1]}/"""
+    trade_out_folder = f"""{project_path}/output/{today}/{form_freq_num}{str(form_freq).split('.')[-1]}_{trans_freq_num}{str(trans_freq).split('.')[-1]}/{form_end}_{trans_start}/"""
 
     pt_db = PairOn(form_end, form_freq, form_freq_num, out_folder=trade_out_folder + 'formation/', pair_bar=pair_bar)
     pair = pt_db.run_pairOn()
@@ -91,8 +91,8 @@ def PairTrading(start_date=start_date, end_date=end_date, form_freq=form_freq, f
         form_end = trans_start
 
     today = get_current_date()
-    bm_df.to_csv(f'{project_path}/output/{today}/{start_date}_{end_date}_ret_index.csv')
-    bm_df.to_pickle(f'{project_path}/output/{today}/{start_date}_{end_date}_ret_index')
+    bm_df.to_csv(f"""{project_path}/output/{today}/{form_freq_num}{str(form_freq).split('.')[-1]}_{trans_freq_num}{str(trans_freq).split('.')[-1]}/{start_date}_{end_date}_ret_index.csv""")
+    bm_df.to_pickle(f"""{project_path}/output/{today}/{form_freq_num}{str(form_freq).split('.')[-1]}_{trans_freq_num}{str(trans_freq).split('.')[-1]}/{start_date}_{end_date}_ret_index""")
 
     pf.create_returns_tear_sheet(bm_df['ret'], benchmark_rets=bm_df[index_sid])
 
@@ -100,4 +100,4 @@ def PairTrading(start_date=start_date, end_date=end_date, form_freq=form_freq, f
 
 
 if __name__ == '__main__':
-    bm_data = PairTrading()
+    bm_data = PairTrading_once()
