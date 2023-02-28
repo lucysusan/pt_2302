@@ -31,8 +31,8 @@ def createFolder(folder_route: str) -> None:
     :param folder_route: 文件夹路径，以/结尾
     :return:
     """
-    if not os.path.exists(folder_route):
-        os.makedirs(folder_route)
+    # if not os.path.exists(folder_route):
+    os.makedirs(folder_route, exist_ok=True)
 
 
 def timer(func):

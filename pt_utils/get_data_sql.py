@@ -160,7 +160,7 @@ class PairTradingData(object):
         else:
             stock_tuple_str = str(stock_list)
         factor_sql = f"""
-            select sid, {select_stmt}
+            select sid, {select_stmt}, industry
             from cne6_exposure
             where sid in {stock_tuple_str}
               and date = '{mdate}';

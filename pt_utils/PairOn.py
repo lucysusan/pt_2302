@@ -53,14 +53,22 @@ class PairOn(object):
         cov = PairTradingData.get_cov_data(mdate).set_index('factor').sort_index()
         factor = PairTradingData.get_stock_factor(sk_tuple, mdate).set_index('sid')
         cov_matrix = np.matrix(cov)
-        combinations = list(itertools.combinations(stock_list, 2))
+
+        ind_list = factor['industry'].unique().tolist()
+        factor_group = factor.groupby(['industry'])
         distance_dict = {}
 
-        for sk_com in combinations:
-            distance = calculate_single_distance_value(sk_com, factor, cov_matrix)
-            distance_dict.update({sk_com: distance})
+        for ind in ind_list:
+        # ind = ind_list[0]
+            factor_value = factor_group.get_group(ind).drop('industry',axis=1)
+            combinations = list(itertools.combinations(factor_value.index,2))
+
+            for sk_com in combinations:
+                distance = calculate_single_distance_value(sk_com, factor_value, cov_matrix)
+                distance_dict.update({sk_com: distance})
 
         distance_series = pd.Series(distance_dict)
+        distance_series.name = mdate
 
         pair_bar = self.pair_bar
         pairs = distance_series[distance_series <= pair_bar].index.tolist()
@@ -121,11 +129,12 @@ class PairOn(object):
         self.pairs = list(pairs_entry_dict.keys())
         return pairs_entry_dict
 
-# if __name__ == '__main__':
-#     end_date = '2018-07-01'
-#     form_freq = TradingFrequency.month
-#     form_freq_num = -1
-#     c = 0.0015
-#     pt_db = PairOn(end_date, form_freq, form_freq_num)
-#     pair = pt_db.run_pairOn()
-#     pair_entry_dict = pt_db.run_opt_pair_entry_level(pair, c)
+
+if __name__ == '__main__':
+    end_date = '2022-01-01'
+    form_freq = TradingFrequency.year
+    form_freq_num = -1
+    c = 0.0015
+    pt_db = PairOn(end_date, form_freq, form_freq_num)
+    pair = pt_db.run_pairOn()
+    # pair_entry_dict = pt_db.run_opt_pair_entry_level(pair, c)

@@ -3,6 +3,7 @@
 Created on 2023/2/16 13:32
 
 @author: Susan
+TODO: 1. 把evaluate作图单独拿出来; 2. PairOn方法改进
 TODO: 重新open时的amount是否应该变换，o.w.Trading's c seems useless;
 TODO: 把收益率重新改下计算方式 - 不涉及成本方法
 Q: 手续费，配对组
@@ -18,8 +19,8 @@ from pt_utils.Trading import Trading, TradingFrequency
 from pt_utils.function import get_current_date, start_end_period, timer
 from pt_utils.get_data_sql import PairTradingData
 
-project_path = os.getcwd()
-# project_path = 'D:\\courses\\2022-2024FDU\\COURCES\\Dlab\\intern\\PairTrading\\pt\\'
+# project_path = os.getcwd()
+project_path = 'D:\\courses\\2022-2024FDU\\COURCES\\Dlab\\intern\\PairTrading\\pt\\'
 
 config_file = project_path + '/input/parameter.ini'
 
@@ -91,8 +92,11 @@ def PairTrading(start_date=start_date, end_date=end_date, form_freq=form_freq, f
         form_end = trans_start
 
     today = get_current_date()
-    bm_df.to_csv(f"""{project_path}/output/{today}/{form_freq_num}{str(form_freq).split('.')[-1]}_{trans_freq_num}{str(trans_freq).split('.')[-1]}/{start_date}_{end_date}_ret_index.csv""")
-    bm_df.to_pickle(f"""{project_path}/output/{today}/{form_freq_num}{str(form_freq).split('.')[-1]}_{trans_freq_num}{str(trans_freq).split('.')[-1]}/{start_date}_{end_date}_ret_index""")
+    out_folder = f"""{project_path}/output/{today}/{form_freq_num}{str(form_freq).split('.')[-1]}_{trans_freq_num}{str(trans_freq).split('.')[-1]}/"""
+    ret_file_name = f"""{start_date}_{end_date}_{form_freq_num}{str(form_freq).split('.')[-1]}_{trans_freq_num}{str(trans_freq).split('.')[-1]}_ret_index"""
+    bm_df.to_csv(f"""{out_folder}{ret_file_name}.csv""")
+    bm_df.to_pickle(f"""{out_folder}{ret_file_name}""")
+    print(out_folder, ret_file_name, ' DONE!')
 
     pf.create_returns_tear_sheet(bm_df['ret'], benchmark_rets=bm_df[index_sid])
 
