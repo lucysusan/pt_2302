@@ -3,13 +3,9 @@
 Created on 2023/2/14 8:44
 
 @author: Susan
- - PARAM_FILE: LOG - FILE
- - 均值回复点：zero-crossing的时间点，看signal
- - 每日检测：超过 check_day_length 天数低于pair_bar则清空这两支股票
 """
 import logging
 import warnings
-from math import floor
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -178,7 +174,7 @@ class Trading(object):
         writer.save()
         writer.close()
 
-    def position_control(self, logger, amount: float = 1e6, c: float = 0.0015):
+    def position_control(self, logger):
         pairs = self.pairs
         pairs_status = self.pairs_status
         price = self.price
@@ -191,7 +187,7 @@ class Trading(object):
 
         columns = pd.MultiIndex.from_product(
             [pairs,
-             ['sk_1_pct', 'sk_1_position', 'sk_2_pct', 'sk_2_position', 'nv_1', 'nv_2', 'nv', 'ret']])
+             ['sk_1_pct', 'sk_1_position', 'sk_2_pct', 'sk_2_position', 'w_1', 'w_2', 'ret']])
         am_df = pd.DataFrame(columns=columns, index=tds_list)
         # TODO: 根据status，将1--1间填充pct_change
 
@@ -232,22 +228,24 @@ class Trading(object):
 
                 i_list = tds_list.index(td)
                 am_df.loc[td, (cc, 'sk_1_pct')] = (price_pivot.loc[td, cc[0]] - close_pivot.loc[
-                    tds_list[i_list], cc[0]]) / close_pivot.loc[tds_list[i_list], cc[0]]
+                    tds_list[i_list-1], cc[0]]) / close_pivot.loc[tds_list[i_list-1], cc[0]]
                 am_df.loc[td, (cc, 'sk_2_pct')] = (price_pivot.loc[td, cc[1]] - close_pivot.loc[
-                    tds_list[i_list], cc[1]]) / close_pivot.loc[tds_list[i_list], cc[1]]
+                    tds_list[i_list-1], cc[1]]) / close_pivot.loc[tds_list[i_list-1], cc[1]]
 
                 am_df.loc[td, (cc, 'sk_1_position')] = 0
                 am_df.loc[td, (cc, 'sk_2_position')] = 0
 
                 nv_df = am_df.loc[open[i]:td, (cc,)][(cc,)]
-                nv_df['nv_1'] = (nv_df['sk_1_pct'] + 1).cumprod()
-                nv_df['nv_2'] = (nv_df['sk_2_pct'] + 1).cumprod()
-                nv_df['nv'] = am_1 * nv_df['nv_1'] + am_2 * nv_df['nv_2']
-                nv_df['ret'] = nv_df['nv'].pct_change()
-                am_df.loc[open[i]:td, (cc,'nv_1')] = nv_df['nv_1']
-                am_df.loc[open[i]:td, (cc,'nv_2')] = nv_df['nv_2']
-                am_df.loc[open[i]:td, (cc, 'nv')] = nv_df['nv']
-                am_df.loc[open[i]:td, (cc, 'ret')] = nv_df['ret']
+                nv_df['w_1'] = (nv_df['sk_1_pct'] + 1).cumprod()
+                nv_df['w_2'] = (nv_df['sk_2_pct'] + 1).cumprod()
+                nv_df['w_1_pre'] = nv_df['w_1'].shift(1)
+                nv_df['w_2_pre'] = nv_df['w_2'].shift(1)
+                nv_df['w_1_pre'] = nv_df['w_1_pre'].fillna(1)
+                nv_df['w_2_pre'] = nv_df['w_2_pre'].fillna(1)
+
+                am_df.loc[open[i]:td, (cc, 'w_1')] = nv_df['w_1']
+                am_df.loc[open[i]:td, (cc, 'w_2')] = nv_df['w_2']
+                am_df.loc[open[i]:td, (cc, 'ret')] = nv_df['w_1_pre'] * nv_df['sk_1_pct'] * am_1 + nv_df['w_2_pre'] * nv_df['sk_2_pct'] * am_2
 
                 logger.info(f'CLOSE - {cc} - {td} - {(-am_1, -am_2)}')
 
@@ -271,7 +269,7 @@ class Trading(object):
         return ret_df
 
     @timer
-    def run(self, out_folder: str, amount: float = 1e6, c: float = 0.0015):
+    def run(self, out_folder: str):
         createFolder(out_folder)
 
         logger = logging.getLogger(__name__)
@@ -284,7 +282,7 @@ class Trading(object):
         logger.info(
             f'---------------------------START_DATE\t{self.start_date}\tEND_DATE\t{self.end_date}---------------------------')
         self.run_open_close()
-        am_df = self.position_control(logger, amount, c)
+        am_df = self.position_control(logger)
         self.write_sheet_pairs(am_df, out_folder)
         rev_df = self.calculate_pairs_rev(am_df, out_folder)
         logger.info(f'---------------------------END---------------------------')
@@ -307,3 +305,13 @@ class Trading(object):
         if disp:
             pf.create_returns_tear_sheet(bm_data['ret'], benchmark_rets=bm_data[index_sid])
         return bm_data
+
+    @staticmethod
+    def pkl_evaluation(pkl_route: str, index_sid: str = '000906.SH', note: str = None):
+        print('\n\n--------------------------------------------------------------------------\n', note)
+        data = pd.read_pickle(pkl_route)
+        data.plot(figsize=(30, 18))
+        plt.title('return')
+        plt.show()
+        pf.create_full_tear_sheet(data['ret'], benchmark_rets=data[index_sid])
+        return

@@ -13,6 +13,9 @@
 # 1MONTH_1MONTH
 
 
+# NOTE
+
+001979.SZ cne6_exposure data since 2016-12-05
 
 # PairTrading
 

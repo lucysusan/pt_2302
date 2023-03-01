@@ -136,7 +136,7 @@ class PairTradingData(object):
 
         cov_sql = f"""
             select {col_list_str}
-            from factor_cov sort 
+            from factor_cov 
             where date = '{mdate}'
             and factor in {str(factor_tuple)}
             order by factor;
@@ -160,13 +160,47 @@ class PairTradingData(object):
         else:
             stock_tuple_str = str(stock_list)
         factor_sql = f"""
-            select sid, {select_stmt}, industry
+            select sid, {select_stmt}
             from cne6_exposure
             where sid in {stock_tuple_str}
               and date = '{mdate}';
             """
 
         return pd.read_sql(factor_sql, PairTradingData.conn)
+
+    @staticmethod
+    def get_stock_industry(stock_list: tuple, start_date: str, end_date: str):
+        """
+        段时间内sid的行业众数
+        :param stock_list:
+        :param start_date:
+        :param end_date:
+        :return:
+        """
+        if not len(stock_list):
+            return pd.DataFrame()
+        elif len(stock_list) == 1:
+            stock_tuple_str = f"""('{stock_list[0]}')"""
+        else:
+            stock_tuple_str = str(stock_list)
+
+        ind_sql = f"""
+        SELECT sid, industry
+        FROM (SELECT sid, industry, COUNT(*) AS cnt
+              FROM cne6_exposure
+              WHERE date BETWEEN '{start_date}' AND '{end_date}'
+              GROUP BY sid, industry) AS subquery
+        WHERE (
+               sid, cnt
+                  ) IN (SELECT sid, MAX(cnt)
+                        FROM (SELECT sid, industry, COUNT(*) AS cnt
+                              FROM cne6_exposure
+                              WHERE date BETWEEN '{start_date}' AND '{end_date}'
+                              AND sid in {stock_tuple_str}
+                              GROUP BY sid, industry) AS subquery2
+                        GROUP BY sid)
+                """
+        return pd.read_sql(ind_sql, PairTradingData.conn)
 
     @staticmethod
     def get_stock_vwap_adj(stock_list: tuple, start_date, end_date) -> pd.DataFrame:

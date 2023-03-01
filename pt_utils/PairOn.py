@@ -21,12 +21,13 @@ from pt_utils.get_data_sql import PairTradingData
 class PairOn(object):
 
     def __init__(self, end_date: str, freq: TradingFrequency = TradingFrequency.month, freq_num: int = -1,
-                 out_folder: str = 'fig/', pair_bar: float = 0.02):
+                 out_folder: str = 'fig/', pair_bar: float = 0.02, pair_pct_bar: float = 0.9):
         self.out_folder = out_folder
         createFolder(out_folder)
         self.start_date, self.end_date = start_end_period(end_date, freq, freq_num)
         self.pairs = None
         self.pair_bar = pair_bar
+        self.pair_pct_bar = pair_pct_bar
 
     def stock_pool(self) -> list:
         """
@@ -42,36 +43,40 @@ class PairOn(object):
 
         return list(stock_list)
 
-    def _pair_on(self, stock_list: list, mdate: str) -> list:
+    def _get_ind_pairs(self, stock_list):
+        start_date = self.start_date
+        end_date = self.end_date
+        sk_tuple = tuple(stock_list)
+        sid_ind = PairTradingData.get_stock_industry(sk_tuple, start_date, end_date).set_index('sid')
+        ind_pair_series = sid_ind.groupby(['industry']).apply(lambda x: list(itertools.combinations(x.index, 2)))
+        ind_pair = [p for sub in ind_pair_series.values for p in sub]
+        return ind_pair
+
+    def _distance_date_series(self, date_series: pd.Series, sk_tuple: tuple):
+        date = date_series.name
+        cov_matrix = np.matrix(PairTradingData.get_cov_data(date).set_index('factor').sort_index())
+        factor = PairTradingData.get_stock_factor(sk_tuple, date).set_index('sid')
+
+        distance_v = pd.Series(data=date_series.index,index=date_series.index)
+        distance_v = distance_v.apply(lambda x: calculate_single_distance_value(x, factor, cov_matrix))
+        return distance_v
+
+    def _pair_on(self, stock_list: list, tds_list: list) -> list:
         """
         配对组
         :param stock_list:
-        :param mdate:
+        :param tds_list: trading timeseries
         :return: list of tuples
+        TODO: 1. get industry; 2. get daily distance data; 3. two bar: daily bar-smaller than 0.03 and pct_bar-0.9
         """
         sk_tuple = tuple(stock_list)
-        cov = PairTradingData.get_cov_data(mdate).set_index('factor').sort_index()
-        factor = PairTradingData.get_stock_factor(sk_tuple, mdate).set_index('sid')
-        cov_matrix = np.matrix(cov)
+        ind_pairs = self._get_ind_pairs(stock_list)
+        distance_df = pd.DataFrame(columns=tds_list, index=ind_pairs)
+        tqdm.pandas(desc='formation')
 
-        ind_list = factor['industry'].unique().tolist()
-        factor_group = factor.groupby(['industry'])
-        distance_dict = {}
-
-        for ind in ind_list:
-        # ind = ind_list[0]
-            factor_value = factor_group.get_group(ind).drop('industry',axis=1)
-            combinations = list(itertools.combinations(factor_value.index,2))
-
-            for sk_com in combinations:
-                distance = calculate_single_distance_value(sk_com, factor_value, cov_matrix)
-                distance_dict.update({sk_com: distance})
-
-        distance_series = pd.Series(distance_dict)
-        distance_series.name = mdate
-
-        pair_bar = self.pair_bar
-        pairs = distance_series[distance_series <= pair_bar].index.tolist()
+        distance_df = distance_df.progress_apply(lambda x: self._distance_date_series(x, sk_tuple), axis=0)
+        distance_tf = (distance_df <= self.pair_bar).mean(axis=1)
+        pairs = distance_tf[distance_tf >= self.pair_pct_bar].index.tolist()
 
         return pairs
 
@@ -82,8 +87,8 @@ class PairOn(object):
         :return:
         """
         stock_list = self.stock_pool()
-        _, mdate = PairTradingData.trading_date_between(self.start_date, self.end_date)
-        pairs = self._pair_on(stock_list, mdate)
+        tds_list, mdate = PairTradingData.trading_date_between(self.start_date, self.end_date)
+        pairs = self._pair_on(stock_list, tds_list)
         self.pairs = pairs
 
         return pairs
