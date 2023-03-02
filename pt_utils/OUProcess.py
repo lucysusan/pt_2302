@@ -26,10 +26,9 @@ class OUProcess(object):
         self.ou_param = None
         self.exists = False
         ou_param = self._estimate_OU_params()
-        if ou_param.alpha >0 and ou_param.beta >0:
+        if ou_param.alpha > 0 and ou_param.beta > 0:
             self.ou_param = ou_param
             self.exists = True
-
 
     def _estimate_OU_params(self) -> OUParams:
         """

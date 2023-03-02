@@ -17,7 +17,6 @@ from pt_utils.function import timer, calculate_single_distance_value, TradingFre
 from pt_utils.get_data_sql import PairTradingData
 
 
-# %% PairOn
 class PairOn(object):
 
     def __init__(self, end_date: str, freq: TradingFrequency = TradingFrequency.month, freq_num: int = -1,
@@ -32,10 +31,13 @@ class PairOn(object):
     def stock_pool(self) -> list:
         """
         股票池
+        remove 停复牌，新退市，缺失因子数据，成交量后20%，市值后20%
         :return:
         """
         start_date, end_date = self.start_date, self.end_date
         stock_list = set(PairTradingData.valid_status_stock(start_date, end_date).values)
+        stock_list = stock_list.intersection(
+            set(PairTradingData.valid_factor_stock(start_date, end_date).values))
         stock_list = stock_list.intersection(
             set(PairTradingData.valid_quote_stock(start_date, end_date).values))
         stock_list = stock_list.intersection(
@@ -57,7 +59,7 @@ class PairOn(object):
         cov_matrix = np.matrix(PairTradingData.get_cov_data(date).set_index('factor').sort_index())
         factor = PairTradingData.get_stock_factor(sk_tuple, date).set_index('sid')
 
-        distance_v = pd.Series(data=date_series.index,index=date_series.index)
+        distance_v = pd.Series(data=date_series.index, index=date_series.index)
         distance_v = distance_v.apply(lambda x: calculate_single_distance_value(x, factor, cov_matrix))
         return distance_v
 

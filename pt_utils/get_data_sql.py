@@ -78,6 +78,24 @@ class PairTradingData(object):
         return pd.read_sql(all_stock_sql, PairTradingData.conn)['sid']
 
     @staticmethod
+    def valid_factor_stock(start_date: str, end_date: str) -> pd.DataFrame:
+        """
+        在start_date,end_date每一个交易日都有因子数据的股票(通常上市一年后)
+        :param start_date:
+        :param end_date:
+        :return:
+        """
+        factor_stock_sql = f"""
+        SELECT sid
+        FROM cne6_exposure
+        WHERE date BETWEEN '{start_date}' and '{end_date}'
+        GROUP BY sid
+        HAVING COUNT(DISTINCT date) =
+               (SELECT COUNT(DISTINCT date) FROM cne6_exposure WHERE date BETWEEN '{start_date}' and '{end_date}')
+        """
+        return pd.read_sql(factor_stock_sql, PairTradingData.conn)['sid']
+
+    @staticmethod
     def valid_quote_stock(start_date: str, end_date: str, quantile: float = 0.8) -> pd.Series:
         """
         成交量满足条件的stock_list

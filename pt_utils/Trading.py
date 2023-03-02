@@ -59,18 +59,22 @@ class Trading(object):
         status = pd.Series(index=index_list, data=0)
         abs_series = abs(series)
         status_open = abs_series >= abs(a)
+        # loss control
+        status_loss = abs_series >= 2 * abs(a)
 
+        # transfer sign the latter
         sig_series = np.sign(series) * np.sign(series.shift(1))
         status_close = sig_series <= 0
 
         status[status_open] = 1
         status[status_close] = -1
+        status[status_loss] = -1
 
         for end in range(len(index_list)):
             if not sum(status[:index_list[end]]) in [0, 1]:
                 status[end] = 0
 
-        # if positions exists, last day will close all positions compulsory
+        # if positions exists, last day will close all positions compulsorily
         sum_status = sum(status[:-1])
 
         status[index_list[-1]] = -1 if sum_status else 0
@@ -94,7 +98,7 @@ class Trading(object):
             price_pivot = price_pair.pivot(index='date', columns='sid', values='vwap_adj')
 
             spread = price_pivot.apply(lambda x: np.log(x[cc[0]]) - np.log(lmda * x[cc[1]]), axis=1)
-            visualize_spread(cc, spread, self.out_folder + f'trans_{str(cc)}.jpg', [a, 0, -a])
+            visualize_spread(cc, spread, self.out_folder + f'trans_{str(cc)}.jpg', [a, 0, -a, 0, 2 * a, 0, -2 * a])
             status = self._series_trading_status(spread, a)
             pairs_status[cc] = status
 
@@ -208,29 +212,43 @@ class Trading(object):
             open = status[status == 1].index.tolist()
             close = status[status == -1].index.tolist()
 
-            for td in open:
-                price_1 = price_pivot.loc[td, cc[0]]
-                price_2 = price_pivot.loc[td, cc[1]]
-
-                am_1, am_2 = self.daily_pair_position_control(price_1, price_2, self.pairs_entry_dict[cc]['lmda'])
-                am_df.loc[td, (cc, 'sk_1_position')] = am_1
-                am_df.loc[td, (cc, 'sk_2_position')] = am_2
-                am_df.loc[td, (cc, 'sk_1_pct')] = (close_pivot.loc[td, cc[0]] - price_pivot.loc[td, cc[0]]) / \
-                                                  price_pivot.loc[td, cc[0]]
-                am_df.loc[td, (cc, 'sk_2_pct')] = (close_pivot.loc[td, cc[1]] - price_pivot.loc[td, cc[1]]) / \
-                                                  price_pivot.loc[td, cc[1]]
-
-                logger.info(f'OPEN - {cc} - {td} - {(am_1, am_2)}')
+            # for td in open:
+            #     price_1 = price_pivot.loc[td, cc[0]]
+            #     price_2 = price_pivot.loc[td, cc[1]]
+            #
+            #     am_1, am_2 = self.daily_pair_position_control(price_1, price_2, self.pairs_entry_dict[cc]['lmda'])
+            #     am_df.loc[td, (cc, 'sk_1_position')] = am_1
+            #     am_df.loc[td, (cc, 'sk_2_position')] = am_2
+            #     am_df.loc[td, (cc, 'sk_1_pct')] = (close_pivot.loc[td, cc[0]] - price_pivot.loc[td, cc[0]]) / \
+            #                                       price_pivot.loc[td, cc[0]]
+            #     am_df.loc[td, (cc, 'sk_2_pct')] = (close_pivot.loc[td, cc[1]] - price_pivot.loc[td, cc[1]]) / \
+            #                                       price_pivot.loc[td, cc[1]]
+            #
+            #     logger.info(f'OPEN - {cc} - {td} - {(am_1, am_2)}')
 
             for i, td in enumerate(close):
-                am_1 = am_df.loc[open[i], (cc, 'sk_1_position')].values[0]
-                am_2 = am_df.loc[open[i], (cc, 'sk_2_position')].values[0]
+                o_td = open[i]
+                price_1 = price_pivot.loc[o_td, cc[0]]
+                price_2 = price_pivot.loc[o_td, cc[1]]
 
+                am_1, am_2 = self.daily_pair_position_control(price_1, price_2, self.pairs_entry_dict[cc]['lmda'])
+                am_df.loc[o_td, (cc, 'sk_1_position')] = am_1
+                am_df.loc[o_td, (cc, 'sk_2_position')] = am_2
+                am_df.loc[o_td, (cc, 'sk_1_pct')] = (close_pivot.loc[o_td, cc[0]] - price_pivot.loc[o_td, cc[0]]) / \
+                                                  price_pivot.loc[o_td, cc[0]]
+                am_df.loc[o_td, (cc, 'sk_2_pct')] = (close_pivot.loc[o_td, cc[1]] - price_pivot.loc[o_td, cc[1]]) / \
+                                                  price_pivot.loc[o_td, cc[1]]
+
+                logger.info(f'OPEN - {cc} - {o_td} - {(am_1, am_2)}')
+
+                # am_1 = am_df.loc[open[i], (cc, 'sk_1_position')].values[0]
+                # am_2 = am_df.loc[open[i], (cc, 'sk_2_position')].values[0]
+                #
                 i_list = tds_list.index(td)
                 am_df.loc[td, (cc, 'sk_1_pct')] = (price_pivot.loc[td, cc[0]] - close_pivot.loc[
-                    tds_list[i_list-1], cc[0]]) / close_pivot.loc[tds_list[i_list-1], cc[0]]
+                    tds_list[i_list - 1], cc[0]]) / close_pivot.loc[tds_list[i_list - 1], cc[0]]
                 am_df.loc[td, (cc, 'sk_2_pct')] = (price_pivot.loc[td, cc[1]] - close_pivot.loc[
-                    tds_list[i_list-1], cc[1]]) / close_pivot.loc[tds_list[i_list-1], cc[1]]
+                    tds_list[i_list - 1], cc[1]]) / close_pivot.loc[tds_list[i_list - 1], cc[1]]
 
                 am_df.loc[td, (cc, 'sk_1_position')] = 0
                 am_df.loc[td, (cc, 'sk_2_position')] = 0
@@ -245,7 +263,9 @@ class Trading(object):
 
                 am_df.loc[open[i]:td, (cc, 'w_1')] = nv_df['w_1']
                 am_df.loc[open[i]:td, (cc, 'w_2')] = nv_df['w_2']
-                am_df.loc[open[i]:td, (cc, 'ret')] = nv_df['w_1_pre'] * nv_df['sk_1_pct'] * am_1 + nv_df['w_2_pre'] * nv_df['sk_2_pct'] * am_2
+                am_df.loc[open[i]:td, (cc, 'ret')] = 2 * (
+                        nv_df['w_1_pre'] * nv_df['sk_1_pct'] * am_1 + nv_df['w_2_pre'] * nv_df[
+                    'sk_2_pct'] * am_2) / (nv_df['w_1_pre'] + nv_df['w_2_pre'])
 
                 logger.info(f'CLOSE - {cc} - {td} - {(-am_1, -am_2)}')
 
@@ -286,6 +306,7 @@ class Trading(object):
         self.write_sheet_pairs(am_df, out_folder)
         rev_df = self.calculate_pairs_rev(am_df, out_folder)
         logger.info(f'---------------------------END---------------------------')
+        logger.removeHandler(file_handler)
         return rev_df
 
     @staticmethod

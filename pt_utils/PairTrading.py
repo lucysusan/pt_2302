@@ -12,7 +12,6 @@ import configparser
 import os
 
 import pandas as pd
-import pyfolio as pf
 
 from pt_utils.PairOn import PairOn
 from pt_utils.Trading import Trading, TradingFrequency
@@ -48,13 +47,14 @@ index_df.index = pd.to_datetime(index_df.index)
 
 
 def PairTrading_once(form_end=form_end, form_freq=form_freq, form_freq_num=form_freq_num, project_path=project_path,
-                     pair_bar=pair_bar, pair_pct_bar=pair_pct_bar,c=c, trans_start=trans_start, trans_freq=trans_freq,
+                     pair_bar=pair_bar, pair_pct_bar=pair_pct_bar, c=c, trans_start=trans_start, trans_freq=trans_freq,
                      trans_freq_num=trans_freq_num,
                      index_df=index_df, index_sid=index_sid, disp: bool = True):
     today = get_current_date()
     trade_out_folder = f"""{project_path}/output/{today}/{form_freq_num}{str(form_freq).split('.')[-1]}_{trans_freq_num}{str(trans_freq).split('.')[-1]}/{form_end}_{trans_start}/"""
 
-    pt_db = PairOn(form_end, form_freq, form_freq_num, out_folder=trade_out_folder + 'formation/', pair_bar=pair_bar, pair_pct_bar=pair_pct_bar)
+    pt_db = PairOn(form_end, form_freq, form_freq_num, out_folder=trade_out_folder + 'formation/', pair_bar=pair_bar,
+                   pair_pct_bar=pair_pct_bar)
     pair = pt_db.run_pairOn()
     pair_entry_dict = pt_db.run_opt_pair_entry_level(pair, c)
 
@@ -71,7 +71,7 @@ def PairTrading_once(form_end=form_end, form_freq=form_freq, form_freq_num=form_
 
 @timer
 def PairTrading(start_date=start_date, end_date=end_date, form_freq=form_freq, form_freq_num=form_freq_num,
-                trans_freq=trans_freq, trans_freq_num=trans_freq_num, pair_bar=pair_bar, pair_pct_bar=pair_pct_bar,c=c,
+                trans_freq=trans_freq, trans_freq_num=trans_freq_num, pair_bar=pair_bar, pair_pct_bar=pair_pct_bar, c=c,
                 index_df=index_df, index_sid=index_sid, project_path=project_path, disp: bool = False):
     _, form_end_start = start_end_period(start_date, form_freq, -form_freq_num)
     trans_start_end, _ = start_end_period(end_date, trans_freq, -trans_freq_num)
@@ -84,7 +84,8 @@ def PairTrading(start_date=start_date, end_date=end_date, form_freq=form_freq, f
 
     while trans_start <= trans_start_end:
         print(trans_start, '-------------------------------------------------------')
-        bm_data, trans_start = PairTrading_once(form_end, form_freq, form_freq_num, project_path, pair_bar, c,pair_pct_bar,
+        bm_data, trans_start = PairTrading_once(form_end, form_freq, form_freq_num, project_path, pair_bar, c,
+                                                pair_pct_bar,
                                                 trans_start,
                                                 trans_freq, trans_freq_num, index_df, index_sid, disp)
         bm_df = pd.concat([bm_df, bm_data])
