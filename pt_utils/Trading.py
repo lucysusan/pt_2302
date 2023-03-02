@@ -24,11 +24,12 @@ plt.rcParams['font.sans-serif'] = ['Microsoft YaHei']
 
 class Trading(object):
 
-    def __init__(self, pairs_entry_dict: dict, pair_bar: float, start_date: str,
+    def __init__(self, pairs_entry_dict: dict, pair_bar: float, start_date: str, lc_rate: float = 3.0,
                  freq: TradingFrequency = TradingFrequency.month,
                  freq_num: int = 1, out_folder: str = None):
         """
         初始化，得到trading_time_list以及最后一个交易日
+        :param lc_rate: loss control rate
         :param start_date:
         :param freq: DEFAULT，按月交易
         按月每日检查是否仍为配对组，每日交易是否发生，交易状态是否改变，每个交易日的revenue是多少；
@@ -38,6 +39,7 @@ class Trading(object):
             - 查看对数价格差的关系，是否达到了敲入敲出的阈值点，若达到了，执行买入卖出操作，并修改该配对组的交易状态，同时记录下该笔交易的发生
         """
         self.pairs_status = None
+        self.lc_rate = lc_rate
         self.pairs = list(pairs_entry_dict.keys())
         self.pairs_entry_dict = pairs_entry_dict
         self.pair_bar = pair_bar
@@ -48,7 +50,7 @@ class Trading(object):
         createFolder(out_folder)
 
     @staticmethod
-    def _series_trading_status(series: pd.Series, a: float) -> pd.Series:
+    def _series_trading_status(series: pd.Series, a: float, lc_rate: float) -> pd.Series:
         """
         对每一个对数价差序列, 返回交易状态序列
         :param series:
@@ -60,7 +62,7 @@ class Trading(object):
         abs_series = abs(series)
         status_open = abs_series >= abs(a)
         # loss control
-        status_loss = abs_series >= 2 * abs(a)
+        status_loss = abs_series >= lc_rate * abs(a)
 
         # transfer sign the latter
         sig_series = np.sign(series) * np.sign(series.shift(1))
@@ -98,8 +100,9 @@ class Trading(object):
             price_pivot = price_pair.pivot(index='date', columns='sid', values='vwap_adj')
 
             spread = price_pivot.apply(lambda x: np.log(x[cc[0]]) - np.log(lmda * x[cc[1]]), axis=1)
-            visualize_spread(cc, spread, self.out_folder + f'trans_{str(cc)}.jpg', [a, 0, -a, 0, 2 * a, 0, -2 * a])
-            status = self._series_trading_status(spread, a)
+            visualize_spread(cc, spread, self.out_folder + f'trans_{str(cc)}.jpg',
+                             [a, 0, -a, 0, self.lc_rate * a, 0, -self.lc_rate * a])
+            status = self._series_trading_status(spread, a, self.lc_rate)
             pairs_status[cc] = status
 
         return pairs_status
@@ -212,20 +215,6 @@ class Trading(object):
             open = status[status == 1].index.tolist()
             close = status[status == -1].index.tolist()
 
-            # for td in open:
-            #     price_1 = price_pivot.loc[td, cc[0]]
-            #     price_2 = price_pivot.loc[td, cc[1]]
-            #
-            #     am_1, am_2 = self.daily_pair_position_control(price_1, price_2, self.pairs_entry_dict[cc]['lmda'])
-            #     am_df.loc[td, (cc, 'sk_1_position')] = am_1
-            #     am_df.loc[td, (cc, 'sk_2_position')] = am_2
-            #     am_df.loc[td, (cc, 'sk_1_pct')] = (close_pivot.loc[td, cc[0]] - price_pivot.loc[td, cc[0]]) / \
-            #                                       price_pivot.loc[td, cc[0]]
-            #     am_df.loc[td, (cc, 'sk_2_pct')] = (close_pivot.loc[td, cc[1]] - price_pivot.loc[td, cc[1]]) / \
-            #                                       price_pivot.loc[td, cc[1]]
-            #
-            #     logger.info(f'OPEN - {cc} - {td} - {(am_1, am_2)}')
-
             for i, td in enumerate(close):
                 o_td = open[i]
                 price_1 = price_pivot.loc[o_td, cc[0]]
@@ -235,15 +224,12 @@ class Trading(object):
                 am_df.loc[o_td, (cc, 'sk_1_position')] = am_1
                 am_df.loc[o_td, (cc, 'sk_2_position')] = am_2
                 am_df.loc[o_td, (cc, 'sk_1_pct')] = (close_pivot.loc[o_td, cc[0]] - price_pivot.loc[o_td, cc[0]]) / \
-                                                  price_pivot.loc[o_td, cc[0]]
+                                                    price_pivot.loc[o_td, cc[0]]
                 am_df.loc[o_td, (cc, 'sk_2_pct')] = (close_pivot.loc[o_td, cc[1]] - price_pivot.loc[o_td, cc[1]]) / \
-                                                  price_pivot.loc[o_td, cc[1]]
+                                                    price_pivot.loc[o_td, cc[1]]
 
                 logger.info(f'OPEN - {cc} - {o_td} - {(am_1, am_2)}')
 
-                # am_1 = am_df.loc[open[i], (cc, 'sk_1_position')].values[0]
-                # am_2 = am_df.loc[open[i], (cc, 'sk_2_position')].values[0]
-                #
                 i_list = tds_list.index(td)
                 am_df.loc[td, (cc, 'sk_1_pct')] = (price_pivot.loc[td, cc[0]] - close_pivot.loc[
                     tds_list[i_list - 1], cc[0]]) / close_pivot.loc[tds_list[i_list - 1], cc[0]]
@@ -305,7 +291,8 @@ class Trading(object):
         am_df = self.position_control(logger)
         self.write_sheet_pairs(am_df, out_folder)
         rev_df = self.calculate_pairs_rev(am_df, out_folder)
-        logger.info(f'---------------------------END---------------------------')
+        logger.info(
+            f'------------------------------------------------END------------------------------------------------')
         logger.removeHandler(file_handler)
         return rev_df
 
