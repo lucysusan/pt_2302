@@ -96,25 +96,27 @@ class PairTradingData(object):
         return pd.read_sql(factor_stock_sql, PairTradingData.conn)['sid']
 
     @staticmethod
-    def valid_quote_stock(start_date: str, end_date: str, quantile: float = 0.8) -> pd.Series:
+    def valid_quote_stock(start_date: str, end_date: str) -> pd.Series:
         """
         成交量满足条件的stock_list
         :param start_date:
         :param end_date:
-        :param quantile:
         :return:
         """
         amount_stock_sql = f"""
             SELECT sid
             FROM (
-              SELECT sid,
-                     ROW_NUMBER() OVER (ORDER BY SUM(amount) DESC) AS row_number,
-                     COUNT(*) AS total_rows
-              FROM quote
-              WHERE date BETWEEN '{start_date}' AND '{end_date}'
-              GROUP BY sid
-            ) derived
-            WHERE row_number <= {quantile} * total_rows;
+              SELECT sid, row_number, NTILE(5) OVER (ORDER BY row_number) AS rank_group
+              FROM
+                  (
+                          SELECT sid,
+                                 ROW_NUMBER() OVER (ORDER BY SUM(amount) DESC) AS row_number
+                          FROM quote
+                          WHERE date BETWEEN '{start_date}' AND '{end_date}'
+                          GROUP BY sid
+                        ) derived
+            )
+            WHERE rank_group <= 4;
             """
         return pd.read_sql(amount_stock_sql, PairTradingData.conn)['sid']
 
@@ -128,17 +130,20 @@ class PairTradingData(object):
         :return:
         """
         mkt_sql = f"""
-            SELECT sid
-            FROM (
-              SELECT sid,
-                     ROW_NUMBER() OVER (ORDER BY SUM(free) DESC) AS row_number,
-                     COUNT(*) AS total_rows
-              FROM mkt_cap
-              WHERE date BETWEEN '{start_date}' AND '{end_date}'
-              GROUP BY sid
-            ) derived
-            WHERE row_number <= {quantile} * total_rows;
-            """
+        SELECT sid
+        FROM (
+          SELECT sid, row_number, NTILE(5) OVER (ORDER BY row_number) AS rank_group
+          FROM
+              (
+                      SELECT sid,
+                             ROW_NUMBER() OVER (ORDER BY SUM(free) DESC) AS row_number
+                      FROM mkt_cap
+                      WHERE date BETWEEN '{start_date}' AND '{end_date}'
+                      GROUP BY sid
+                    ) derived
+        )
+        WHERE rank_group <= 4;
+        """
         return pd.read_sql(mkt_sql, PairTradingData.conn)['sid']
 
     # %% PairOn
