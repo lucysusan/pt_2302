@@ -1,22 +1,3 @@
-# 1YEAR_1YEAR
-
-# 1YEAR_2QUARTER
-
-# 2QUARTER_1YEAR
-
-# 2QUARTER_2QUARTER
-
-# 1QUARTER_1QUARTER
-
-# 1QUARTER_1MONTH
-
-# 1MONTH_1MONTH
-
-
-# NOTE
-
-001979.SZ cne6_exposure data since 2016-12-05
-
 # PairTrading
 
 配对交易在A股市场的实证报告
